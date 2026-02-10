@@ -1,0 +1,165 @@
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Verification Code - UniTrack</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: #f5f5f7;
+        padding: 20px;
+        color: #1d1d1f;
+      }
+
+      .email-wrapper {
+        max-width: 600px;
+        margin: 40px auto;
+        background: #ffffff;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid #e5e5ea;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+      }
+
+      .header {
+        padding: 35px 30px 20px;
+        text-align: center;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      .header h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #111827;
+        margin-bottom: 6px;
+      }
+
+      .subtitle {
+        font-size: 0.95rem;
+        color: #6b7280;
+        font-weight: 400;
+      }
+
+      .content {
+        padding: 40px 30px;
+        text-align: center;
+      }
+
+      .greeting {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 15px;
+      }
+
+      .message {
+        font-size: 1rem;
+        color: #4b5563;
+        margin-bottom: 40px;
+        line-height: 1.5;
+      }
+
+      .otp-label {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: #6b7280;
+        margin-bottom: 15px;
+        font-weight: 500;
+      }
+
+      .otp-code {
+        font-size: 2.8rem;
+        font-weight: 700;
+        letter-spacing: 12px;
+        font-family: "SF Mono", "Courier New", monospace;
+        color: #111827;
+        padding: 20px;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        display: inline-block;
+        background: #fafafa;
+      }
+
+      .warning {
+        margin-top: 40px;
+        font-size: 0.95rem;
+        color: #b45309;
+        background: #fff7ed;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #fed7aa;
+      }
+
+      .security-note {
+        margin-top: 25px;
+        padding: 20px;
+        border-radius: 12px;
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        font-size: 0.9rem;
+        color: #0369a1;
+        line-height: 1.5;
+      }
+
+      .footer {
+        text-align: center;
+        padding: 25px;
+        border-top: 1px solid #f0f0f0;
+        background: #fafafa;
+        font-size: 0.85rem;
+        color: #6b7280;
+      }
+
+      .footer a {
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .footer a:hover {
+        text-decoration: underline;
+      }
+
+      @media (max-width: 600px) {
+        .otp-code {
+          font-size: 2.2rem;
+          letter-spacing: 8px;
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-wrapper">
+      <div class="header">
+        <h1>🎓 UniTrack</h1>
+        <div class="subtitle">Attendance Management System</div>
+      </div>
+
+      <div class="content">
+        <div class="greeting">Hello 👋</div>
+        <div class="message">
+          To {{purpose}}, please enter the code below on UniTrack.
+        </div>
+
+        <div class="otp-label">Your Code</div>
+        <div class="otp-code">{{otp}}</div>
+
+        <div class="warning">
+          ⏰ This code expires in {{expiryMinutes}} minutes ({{expiryTime}}).
+        </div>
+
+        <div class="security-note">
+          If you didn’t request this, ignore this email. Never share your code. UniTrack staff will never ask for it.
+        </div>
+      </div>
+
+      <div class="footer">
+        © 2025 UniTrack. All rights reserved.<br />
+        <a href="#">Visit Website</a> | <a href="#">Contact Support</a>
+      </div>
+    </div>
+  </body>
+</html>

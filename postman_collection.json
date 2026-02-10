@@ -1,0 +1,2368 @@
+{
+  "info": {
+    "name": "UniTrack Attendance System - Complete API",
+    "description": "Comprehensive API collection for UniTrack Attendance System with FAQ management, Support system, Enhanced Session management and Analytics.\n\n## 🆕 New Features Added:\n\n### FAQ Management:\n- ✅ Get all FAQs with pagination and filtering\n- ✅ Get FAQ categories with counts\n- ✅ Create, update, delete FAQs (Admin only)\n- ✅ Bulk FAQ creation\n- ✅ FAQ view tracking\n\n### Support System:\n- ✅ Submit support requests with priority levels\n- ✅ Get support info and guidelines\n- ✅ FAQ system integration\n- ✅ Email notifications to all admins\n- ✅ User confirmation emails\n- ✅ Rate limiting for support requests\n\n### Enhanced Session Management:\n- ✅ Get all lecturer sessions (active/inactive)\n- ✅ Detailed session analytics\n- ✅ Session statistics and attendance data\n- ✅ Time-based analytics and trends\n\n## 🔐 Authentication Flow\n\n### New User Registration:\n1. **Register Teacher** - Creates account with OTP\n2. **Verify Registration** - Complete registration with OTP\n3. **Login** - Access the system\n\n### Unverified User Flow:\n1. **Login Unverified User** - Triggers new OTP\n2. **Request New Verification Code** - Get fresh OTP if needed\n3. **Verify Email with OTP** - Complete verification and login\n\n### Existing User Flow:\n1. **Login Teacher/Admin** - Direct login for verified users\n2. **Request Password Reset OTP** - If password forgotten\n3. **Verify OTP and Reset Password** - Complete password reset\n\n### Security & Validation:\n- ✅ Enhanced CORS support\n- ✅ Comprehensive input validation\n- ✅ Rate limiting on sensitive endpoints\n- ✅ Admin authentication for protected routes\n- ✅ Email verification required for teachers\n- ✅ Admins are auto-verified\n- ✅ OTPs expire after 1 hour\n- ✅ Welcome emails after verification\n- ✅ Enhanced email templates with expiry times\n- ✅ OTPs stored in user models (not separate collection)",
+    "version": "3.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "registrationToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "verificationToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "courseId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "studentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sessionCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "targetTeacherId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "targetCourseId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "shareRequestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "teacherId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "studentId1",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "studentId2",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "faqId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supportTicketId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "teacherToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "1. Register Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('registrationToken', response.registrationToken);",
+                  "    pm.test('Registration token received', function () {",
+                  "        pm.expect(response.registrationToken).to.be.a('string');",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"teacher\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register_teacher",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register_teacher"]
+            }
+          }
+        },
+        {
+          "name": "2. Verify Registration (Manual OTP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.token);",
+                  "    pm.test('Auth token received', function () {",
+                  "        pm.expect(response.token).to.be.a('string');",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationToken\": \"{{registrationToken}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify_registration",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify_registration"]
+            }
+          }
+        },
+        {
+          "name": "3. Login Teacher (Verified)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.token);",
+                  "    pm.collectionVariables.set('teacherToken', response.token);",
+                  "    pm.test('Auth token received', function () {",
+                  "        pm.expect(response.token).to.be.a('string');",
+                  "    });",
+                  "    pm.test('User type is teacher', function () {",
+                  "        pm.expect(response.userType).to.eql('teacher');",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"muhammedabiodun42@gmail.com\",\n  \"password\": \"balikiss12\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "4. Login Unverified User (Gets OTP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 403) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('verificationToken', response.verificationToken);",
+                  "    pm.test('Verification token received', function () {",
+                  "        pm.expect(response.verificationToken).to.be.a('string');",
+                  "    });",
+                  "    pm.test('Needs verification flag set', function () {",
+                  "        pm.expect(response.needsVerification).to.be.true;",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 403 (Email not verified)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"unverified@example.com\",\n  \"password\": \"balikiss12\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "5. Request New Verification Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('verificationToken', response.verificationToken);",
+                  "    pm.test('New verification token received', function () {",
+                  "        pm.expect(response.verificationToken).to.be.a('string');",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"unverified@example.com\",\n  \"verificationToken\": \"{{verificationToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/request_verification_code",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "request_verification_code"]
+            }
+          }
+        },
+        {
+          "name": "6. Verify Email with OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.token);",
+                  "    pm.test('Auth token received after verification', function () {",
+                  "        pm.expect(response.token).to.be.a('string');",
+                  "    });",
+                  "    pm.test('User type is teacher', function () {",
+                  "        pm.expect(response.userType).to.eql('teacher');",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verificationToken\": \"{{verificationToken}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify_email",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify_email"]
+            }
+          }
+        },
+        {
+          "name": "7. Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.token);",
+                  "    pm.collectionVariables.set('adminToken', response.token);",
+                  "    pm.test('Auth token received', function () {",
+                  "        pm.expect(response.token).to.be.a('string');",
+                  "    });",
+                  "    pm.test('User type is admin', function () {",
+                  "        pm.expect(response.userType).to.eql('admin');",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"louisdiaz43@gmail.com\",\n  \"password\": \"balikiss12\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "8. Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Logout successful message', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.message).to.eql('Logout successful');",
+                  "});",
+                  "",
+                  "pm.test('Timestamp provided', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.timestamp).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Clear the auth token after successful logout",
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.unset('authToken');",
+                  "    console.log('Auth token cleared after logout');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        },
+        {
+          "name": "9. Request Password Reset OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains success message', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.message).to.include('OTP has been sent');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"muhammedabiodun42@gmail.com\",\n  \"purpose\": \"password_reset\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/request_otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "request_otp"]
+            }
+          }
+        },
+        {
+          "name": "10. Verify OTP and Reset Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Password reset successful', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.message).to.include('Password reset successful');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"muhammedabiodun42@gmail.com\",\n  \"otp\": \"123456\",\n  \"purpose\": \"password_reset\",\n  \"newPassword\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify_otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify_otp"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎓 Course Management",
+      "item": [
+        {
+          "name": "1. Create Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('courseId', response.course._id);",
+                  "    pm.test('Course ID saved', function () {",
+                  "        pm.expect(response.course._id).to.be.a('string');",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"course_code\": \"CS102\",\n  \"title\": \"Data Structures and Algorithms\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courses",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses"]
+            }
+          }
+        },
+        {
+          "name": "2. Get All Courses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courses?page=1&limit=10&level=200&search=programming",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "level",
+                  "value": "200",
+                  "disabled": true,
+                  "description": "Filter by course level (100, 200, 300, 400, 500, 600)"
+                },
+                {
+                  "key": "search",
+                  "value": "programming",
+                  "disabled": true,
+                  "description": "Search in course code and title"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Get Specific Course",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "{{courseId}}"]
+            }
+          }
+        },
+        {
+          "name": "4. Update Course",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Advanced Data Structures and Algorithms\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "{{courseId}}"]
+            }
+          }
+        },
+        {
+          "name": "5. Delete Course",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "{{courseId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👥 Student Management",
+      "item": [
+        {
+          "name": "1. Add Student to Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('studentId', response.enrollment.student_id._id);",
+                  "}",
+                  "",
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matric_no\": \"CSC/2024/001\",\n  \"name\": \"Test Student\",\n  \"email\": \"test.student@email.com\",\n  \"phone\": \"1234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}/students",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "{{courseId}}", "students"]
+            }
+          }
+        },
+        {
+          "name": "2. Get Course Students",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}/students?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "{{courseId}}", "students"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Get Student Attendance History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}/students/{{studentId}}/attendance",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "courses",
+                "{{courseId}}",
+                "students",
+                "{{studentId}}",
+                "attendance"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Remove Student from Course",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}/students/{{studentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "{{courseId}}", "students", "{{studentId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📍 Session Management",
+      "item": [
+        {
+          "name": "1. Start Attendance Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('sessionId', response.session.id);",
+                  "    pm.collectionVariables.set('sessionCode', response.session.session_code);",
+                  "    pm.test('Session created', function () {",
+                  "        pm.expect(response.session.session_code).to.be.a('string');",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 6.5244,\n  \"lng\": 3.3792,\n  \"radius_m\": 100,\n  \"duration_minutes\": 60\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}/sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "{{courseId}}", "sessions"]
+            }
+          }
+        },
+        {
+          "name": "2. Get Course Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}/sessions?status=active&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "{{courseId}}", "sessions"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Get Session Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/{{sessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "{{sessionId}}"]
+            }
+          }
+        },
+        {
+          "name": "4. Live Session Monitoring",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/{{sessionId}}/live",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "{{sessionId}}", "live"]
+            }
+          }
+        },
+        {
+          "name": "5. End Session Early",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/{{sessionId}}/end",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "{{sessionId}}", "end"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "✅ Attendance Submission",
+      "item": [
+        {
+          "name": "1. Submit Attendance (Student)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matric_no\": \"CSC/2021/001\",\n  \"session_code\": \"{{sessionCode}}\",\n  \"lat\": 6.5244,\n  \"lng\": 3.3792,\n  \"accuracy\": 10,\n  \"device_info\": {\n    \"platform\": \"Web\",\n    \"browser\": \"Chrome\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/attendance/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "submit"]
+            }
+          }
+        },
+        {
+          "name": "2. Submit Attendance (Out of Range)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matric_no\": \"CSC/2021/002\",\n  \"session_code\": \"{{sessionCode}}\",\n  \"lat\": 6.6000,\n  \"lng\": 3.4000,\n  \"accuracy\": 10,\n  \"device_info\": {\n    \"platform\": \"Web\",\n    \"browser\": \"Firefox\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/attendance/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "submit"]
+            }
+          }
+        },
+        {
+          "name": "3. Get Session Attendance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/session/{{sessionId}}?status=present&page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "session", "{{sessionId}}"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "present"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Manual Mark Attendance",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"status\": \"manual_present\",\n  \"reason\": \"Late arrival but was present\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courses/{{courseId}}/students/{{studentId}}/mark",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "courses",
+                "{{courseId}}",
+                "students",
+                "{{studentId}}",
+                "mark"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Enhanced Session Management",
+      "item": [
+        {
+          "name": "Get All Lecturer Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/lecturer/all?page=1&limit=20&status=active",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "lecturer", "all"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "description": "Options: active, expired, inactive"
+                },
+                { "key": "course_id", "value": "", "disabled": true },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Sessions (No Filter)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/lecturer/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "lecturer", "all"]
+            }
+          }
+        },
+        {
+          "name": "Get Expired Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/lecturer/all?status=expired",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "lecturer", "all"],
+              "query": [{ "key": "status", "value": "expired" }]
+            }
+          }
+        },
+        {
+          "name": "Search Sessions by Course",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/lecturer/all?search=CS",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "lecturer", "all"],
+              "query": [{ "key": "search", "value": "CS" }]
+            }
+          }
+        },
+        {
+          "name": "Get Session Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/lecturer/{{sessionId}}/details",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "lecturer", "{{sessionId}}", "details"]
+            }
+          }
+        },
+        {
+          "name": "Get Lecturer Analytics (7 days)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/lecturer/analytics?days=7",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "lecturer", "analytics"],
+              "query": [{ "key": "days", "value": "7" }]
+            }
+          }
+        },
+        {
+          "name": "Get Lecturer Analytics (30 days)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/lecturer/analytics?days=30",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "lecturer", "analytics"],
+              "query": [{ "key": "days", "value": "30" }]
+            }
+          }
+        },
+        {
+          "name": "Get Course-Specific Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/lecturer/analytics?days=30&course_id={{courseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "lecturer", "analytics"],
+              "query": [
+                { "key": "days", "value": "30" },
+                { "key": "course_id", "value": "{{courseId}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Reports & Analytics",
+      "item": [
+        {
+          "name": "1. Get Course Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "stats"]
+            }
+          }
+        },
+        {
+          "name": "2. Download CSV Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/report.csv?startDate=2025-08-01&endDate=2025-08-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "report.csv"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-08-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Email CSV Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/report.csv?email=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "report.csv"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Download PDF Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/report.pdf?startDate=2025-08-01&endDate=2025-08-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "report.pdf"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-08-31"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔧 Admin Management",
+      "item": [
+        {
+          "name": "1. Get System Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "stats"]
+            }
+          }
+        },
+        {
+          "name": "2. Get All Teachers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/teachers?page=1&limit=20&search=john",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "teachers"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": "john"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Create Teacher Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Teacher\",\n  \"email\": \"newteacher@unitrack.edu\",\n  \"role\": \"teacher\",\n  \"sendWelcomeEmail\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/teachers",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "teachers"]
+            }
+          }
+        },
+        {
+          "name": "4. Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/audit-logs?page=1&limit=50&action=login",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "audit-logs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "action",
+                  "value": "login"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5. System Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔄 Student Sharing",
+      "item": [
+        {
+          "name": "1. Get Available Teachers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/teachers",
+              "host": ["{{baseUrl}}"],
+              "path": ["student-sharing", "teachers"]
+            }
+          }
+        },
+        {
+          "name": "2. Get My Courses with Student Counts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/my-courses",
+              "host": ["{{baseUrl}}"],
+              "path": ["student-sharing", "my-courses"]
+            }
+          }
+        },
+        {
+          "name": "3. View Another Teacher's Students",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/teachers/{{targetTeacherId}}/courses/{{targetCourseId}}/students",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "student-sharing",
+                "teachers",
+                "{{targetTeacherId}}",
+                "courses",
+                "{{targetCourseId}}",
+                "students"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Request Students from Another Teacher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target_teacher_id\": \"{{targetTeacherId}}\",\n  \"target_course_id\": \"{{targetCourseId}}\",\n  \"my_course_id\": \"{{courseId}}\",\n  \"student_ids\": [\"{{studentId1}}\", \"{{studentId2}}\"],\n  \"message\": \"Hi! I would like to add these students to my course for a joint project. Thank you!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/request",
+              "host": ["{{baseUrl}}"],
+              "path": ["student-sharing", "request"]
+            }
+          }
+        },
+        {
+          "name": "5. Get Incoming Share Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/incoming?status=pending&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["student-sharing", "incoming"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Get Outgoing Share Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/outgoing?status=all&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["student-sharing", "outgoing"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "all"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "7. Approve Share Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"approve\",\n  \"response_message\": \"Approved! Happy to share these students with you.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/{{shareRequestId}}/respond",
+              "host": ["{{baseUrl}}"],
+              "path": ["student-sharing", "{{shareRequestId}}", "respond"]
+            }
+          }
+        },
+        {
+          "name": "8. Reject Share Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"reject\",\n  \"response_message\": \"Sorry, I cannot share these students at this time.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/{{shareRequestId}}/respond",
+              "host": ["{{baseUrl}}"],
+              "path": ["student-sharing", "{{shareRequestId}}", "respond"]
+            }
+          }
+        },
+        {
+          "name": "9. Cancel Outgoing Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/student-sharing/{{shareRequestId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["student-sharing", "{{shareRequestId}}", "cancel"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Enhanced Reports & Analytics",
+      "item": [
+        {
+          "name": "1. Get Course Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "stats"]
+            }
+          }
+        },
+        {
+          "name": "2. Download CSV Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/report.csv?startDate=2025-08-01&endDate=2025-08-31&status=present",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "report.csv"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-08-31"
+                },
+                {
+                  "key": "status",
+                  "value": "present"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Email CSV Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/report.csv?email=true&startDate=2025-08-01&endDate=2025-08-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "report.csv"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "true"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-08-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Download PDF Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/report.pdf?startDate=2025-08-01&endDate=2025-08-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "report.pdf"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-08-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5. Email PDF Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/course/{{courseId}}/report.pdf?email=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "course", "{{courseId}}", "report.pdf"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔧 Enhanced Admin Management",
+      "item": [
+        {
+          "name": "1. Get System Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "stats"]
+            }
+          }
+        },
+        {
+          "name": "2. Get All Teachers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/teachers?page=1&limit=20&search=john",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "teachers"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": "john"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Get All Attendance Records",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/attendance?page=1&limit=50&status=present&start_date=2025-08-01&end_date=2025-08-31&search=CSC301",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "attendance"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "status",
+                  "value": "present"
+                },
+                {
+                  "key": "start_date",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2025-08-31"
+                },
+                {
+                  "key": "search",
+                  "value": "CSC301"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Download Admin CSV Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/attendance/report.csv?teacher_id={{teacherId}}&start_date=2025-08-01&end_date=2025-08-31&status=present",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "attendance", "report.csv"],
+              "query": [
+                {
+                  "key": "teacher_id",
+                  "value": "{{teacherId}}"
+                },
+                {
+                  "key": "start_date",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2025-08-31"
+                },
+                {
+                  "key": "status",
+                  "value": "present"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5. Email Admin CSV Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/attendance/report.csv?email=true&start_date=2025-08-01&end_date=2025-08-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "attendance", "report.csv"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "true"
+                },
+                {
+                  "key": "start_date",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2025-08-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Download Admin PDF Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/attendance/report.pdf?course_id={{courseId}}&start_date=2025-08-01&end_date=2025-08-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "attendance", "report.pdf"],
+              "query": [
+                {
+                  "key": "course_id",
+                  "value": "{{courseId}}"
+                },
+                {
+                  "key": "start_date",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2025-08-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "7. Email Admin PDF Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/attendance/report.pdf?email=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "attendance", "report.pdf"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "8. Create Teacher Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. Sarah Johnson\",\n  \"email\": \"sarah.johnson@university.edu\",\n  \"role\": \"teacher\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/teachers",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "teachers"]
+            }
+          }
+        },
+        {
+          "name": "9. Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/audit-logs?page=1&limit=50&action=login",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "audit-logs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "action",
+                  "value": "login"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "10. System Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 FAQ Management",
+      "item": [
+        {
+          "name": "Get All FAQs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/faq?page=1&limit=10&category=technical",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "category", "value": "technical" },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get FAQ Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/faq/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Get Single FAQ",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/faq/{{faqId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq", "{{faqId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create FAQ (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"How do I reset my password?\",\n  \"answer\": \"You can reset your password by clicking the 'Forgot Password' link on the login page and following the email instructions.\",\n  \"category\": \"general\",\n  \"display_order\": 1,\n  \"tags\": [\"password\", \"reset\", \"login\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/faq",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq"]
+            }
+          }
+        },
+        {
+          "name": "Update FAQ (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"How do I reset my password? (Updated)\",\n  \"answer\": \"Updated answer: You can reset your password by clicking the 'Forgot Password' link on the login page.\",\n  \"category\": \"general\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/faq/{{faqId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq", "{{faqId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete FAQ (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/faq/{{faqId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq", "{{faqId}}"]
+            }
+          }
+        },
+        {
+          "name": "Bulk Create FAQs (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"faqs\": [\n    {\n      \"question\": \"What browsers are supported?\",\n      \"answer\": \"UniTrack supports all modern browsers including Chrome, Firefox, Safari, and Edge.\",\n      \"category\": \"technical\",\n      \"display_order\": 1\n    },\n    {\n      \"question\": \"How accurate is location tracking?\",\n      \"answer\": \"Location tracking is accurate within 5-10 meters using GPS technology.\",\n      \"category\": \"technical\",\n      \"display_order\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/faq/bulk",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq", "bulk"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎫 Support System",
+      "item": [
+        {
+          "name": "Submit Support Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@university.edu\",\n  \"user_type\": \"student\",\n  \"subject\": \"Unable to submit attendance\",\n  \"category\": \"attendance\",\n  \"priority\": \"medium\",\n  \"message\": \"I am having trouble submitting my attendance for today's session. The system shows an error message saying location is not valid, but I am clearly within the campus. Please help me resolve this issue as soon as possible.\",\n  \"phone\": \"+2348123456789\",\n  \"matric_no\": \"CS/2021/001\",\n  \"course_info\": {\n    \"course_code\": \"CS301\",\n    \"session_id\": \"12345\"\n  },\n  \"error_details\": {\n    \"error_code\": \"LOCATION_INVALID\",\n    \"error_message\": \"Location verification failed\",\n    \"timestamp\": \"2025-08-29T08:00:00Z\"\n  },\n  \"browser_info\": {\n    \"browser\": \"Chrome\",\n    \"version\": \"91.0.4472.124\",\n    \"os\": \"Windows 10\",\n    \"screen_resolution\": \"1920x1080\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/support/contact",
+              "host": ["{{baseUrl}}"],
+              "path": ["support", "contact"]
+            }
+          }
+        },
+        {
+          "name": "Submit Urgent Support Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Smith\",\n  \"email\": \"jane.smith@university.edu\",\n  \"user_type\": \"teacher\",\n  \"subject\": \"System completely down - cannot create sessions\",\n  \"category\": \"urgent\",\n  \"priority\": \"urgent\",\n  \"message\": \"The entire attendance system appears to be down. I cannot create any new sessions for my classes and students are unable to submit attendance. This is affecting multiple classes and needs immediate attention.\",\n  \"phone\": \"+2348987654321\",\n  \"error_details\": {\n    \"error_code\": \"500\",\n    \"error_message\": \"Internal Server Error\",\n    \"timestamp\": \"2025-08-29T08:00:00Z\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/support/contact",
+              "host": ["{{baseUrl}}"],
+              "path": ["support", "contact"]
+            }
+          }
+        },
+        {
+          "name": "Get Support Information",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/support/info",
+              "host": ["{{baseUrl}}"],
+              "path": ["support", "info"]
+            }
+          }
+        },
+        {
+          "name": "Get Support FAQ",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/support/faq",
+              "host": ["{{baseUrl}}"],
+              "path": ["support", "faq"]
+            }
+          }
+        },
+        {
+          "name": "Support System Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/support/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["support", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏥 Health & Utilities",
+      "item": [
+        {
+          "name": "1. Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "2. Invalid Endpoint (404 Test)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/invalid-endpoint",
+              "host": ["{{baseUrl}}"],
+              "path": ["invalid-endpoint"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Pre-request script for common setup",
+          "pm.request.headers.add({key: 'User-Agent', value: 'Postman/unitrack-API-Test'});"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script",
+          "pm.test('Response time is less than 5000ms', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});",
+          "",
+          "pm.test('Response has valid JSON', function () {",
+          "    pm.response.to.be.json;",
+          "});"
+        ]
+      }
+    }
+  ]
+}
