@@ -7,6 +7,10 @@ const mongoose = require("mongoose");
 // Import database connection
 const connectDB = require("./config/database");
 
+// Swagger
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
+
 // Import middleware
 const { generalLimiter } = require("./middleware/rateLimiter");
 
@@ -48,11 +52,11 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Credentials", "true");
   res.header(
     "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD",
   );
   res.header(
     "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-HTTP-Method-Override, Set-Cookie, Cookie, Request-Id"
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-HTTP-Method-Override, Set-Cookie, Cookie, Request-Id",
   );
   res.header("Access-Control-Expose-Headers", "*");
   res.header("Access-Control-Max-Age", "86400"); // 24 hours
@@ -62,7 +66,7 @@ app.use((req, res, next) => {
     console.log(`✅ CORS preflight request from: ${origin || "unknown"}`);
     return res.status(200).end();
   }
-  
+
   next();
 });
 
@@ -71,7 +75,8 @@ app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
     crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
-  })
+    contentSecurityPolicy: false, // Disabled so Swagger UI loads correctly
+  }),
 );
 
 // Rate limiting
@@ -103,6 +108,16 @@ app.get("/health", (req, res) => {
     version: "1.0.0",
   });
 });
+
+// Swagger UI
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customSiteTitle: "UniTrack API Docs",
+    swaggerOptions: { persistAuthorization: true },
+  }),
+);
 
 // API routes
 app.use("/api/auth", authRoutes);
@@ -185,7 +200,7 @@ app.use((error, req, res, next) => {
   ) {
     console.warn(
       "⚠️  Email error caught (operation continued):",
-      error.message
+      error.message,
     );
     // Don't expose email errors to client, log and continue
     return res.status(200).json({
@@ -248,7 +263,7 @@ process.on("unhandledRejection", (reason, promise) => {
   ) {
     console.warn(
       "⚠️  Email error in unhandled rejection (continuing operation):",
-      reason.message
+      reason.message,
     );
     return; // Don't crash, just log it
   }
@@ -274,7 +289,7 @@ process.on("uncaughtException", (error) => {
   ) {
     console.warn(
       "⚠️  Email error in uncaught exception (continuing operation):",
-      error.message
+      error.message,
     );
     return; // Don't crash, just log it
   }
@@ -290,7 +305,7 @@ app.listen(PORT, () => {
 🚀 UniTrack Attendance System Backend Server Started
 📍 Environment: ${process.env.NODE_ENV || "development"}
 🌐 Port: ${PORT}
-📊 API Documentation: http://localhost:${PORT}/api
+📊 Swagger UI: http://localhost:${PORT}/api-docs
 🏥 Health Check: http://localhost:${PORT}/health
 ${
   process.env.NODE_ENV === "development"
