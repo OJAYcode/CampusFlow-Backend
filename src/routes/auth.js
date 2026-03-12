@@ -84,7 +84,7 @@ router.post(
 
       // Check if email was actually sent or skipped
       if (emailResult && emailResult.skipped) {
-        console.warn(`⚠️  Registration OTP could not be sent to ${email}`);
+        console.warn(`⚠️  Registration OTP could not be sent to ${email}. Reason: ${emailResult.reason}`);
         // Rollback - delete the temporary teacher record
         await Teacher.findByIdAndDelete(tempTeacher._id);
 
@@ -94,6 +94,7 @@ router.post(
             "We're having trouble sending emails right now. Please try again later or contact support.",
           details:
             "Registration cannot be completed without email verification.",
+          reason: emailResult.reason,
           otp_for_dev: process.env.NODE_ENV === "development" ? otp : undefined, // Only in dev mode
         });
       }
