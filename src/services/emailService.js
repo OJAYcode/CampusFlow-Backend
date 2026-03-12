@@ -13,14 +13,15 @@ class EmailService {
         !process.env.EMAIL_PASS
       ) {
         console.warn(
-          "⚠️  Email service disabled: Missing email configuration (EMAIL_HOST, EMAIL_USER, or EMAIL_PASS)"
+          "⚠️  Email service disabled: Missing email configuration (EMAIL_HOST, EMAIL_USER, or EMAIL_PASS)",
         );
         this.transporter = null;
       } else {
+        const port = parseInt(process.env.EMAIL_PORT) || 465;
         this.transporter = nodemailer.createTransport({
           host: process.env.EMAIL_HOST,
-          port: parseInt(process.env.EMAIL_PORT) || 587,
-          secure: false, // true for 465, false for other ports
+          port,
+          secure: port === 465, // true for 465 (SSL), false for 587 (STARTTLS)
           auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,
@@ -29,7 +30,12 @@ class EmailService {
           socketTimeout: 15000, // 15 seconds for socket inactivity
           greetingTimeout: 10000, // 10 seconds for greeting
         });
-        console.log("✅ Email service configured with host:", process.env.EMAIL_HOST);
+        console.log(
+          "✅ Email service configured with host:",
+          process.env.EMAIL_HOST,
+          "port:",
+          port,
+        );
       }
 
       // Register Handlebars helpers
@@ -46,7 +52,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Email service initialization failed (emails will be skipped):",
-        error.message
+        error.message,
       );
       this.emailEnabled = false;
       this.transporter = null;
@@ -58,14 +64,14 @@ class EmailService {
       const templatePath = path.join(
         __dirname,
         "../templates/email",
-        `${templateName}.hbs`
+        `${templateName}.hbs`,
       );
       const templateSource = await fs.readFile(templatePath, "utf8");
       return handlebars.compile(templateSource);
     } catch (error) {
       console.error(
         `⚠️  Failed to load email template ${templateName} (email skipped):`,
-        error.message
+        error.message,
       );
       return null;
     }
@@ -76,7 +82,7 @@ class EmailService {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - OTP email skipped for ${email}`
+          `⚠️  Email service not configured - OTP email skipped for ${email}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -88,7 +94,7 @@ class EmailService {
       }
 
       const expiryTime = new Date(
-        Date.now() + 60 * 60 * 1000
+        Date.now() + 60 * 60 * 1000,
       ).toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
@@ -121,13 +127,13 @@ class EmailService {
     teacherEmail,
     teacherName,
     courseTitle,
-    sessionCode
+    sessionCode,
   ) {
     try {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - Session notification skipped for ${teacherEmail}`
+          `⚠️  Email service not configured - Session notification skipped for ${teacherEmail}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -135,7 +141,7 @@ class EmailService {
       const template = await this.loadTemplate("session-notification");
       if (!template) {
         console.warn(
-          `⚠️  Template not found - Session notification skipped for ${teacherEmail}`
+          `⚠️  Template not found - Session notification skipped for ${teacherEmail}`,
         );
         return { skipped: true, reason: "Template not found" };
       }
@@ -160,7 +166,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Failed to send session notification (skipped):",
-        error.message
+        error.message,
       );
       return { skipped: true, reason: error.message };
     }
@@ -171,13 +177,13 @@ class EmailService {
     teacherName,
     courseName,
     reportBuffer,
-    format = "csv"
+    format = "csv",
   ) {
     try {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - Attendance report email skipped for ${teacherEmail}`
+          `⚠️  Email service not configured - Attendance report email skipped for ${teacherEmail}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -185,7 +191,7 @@ class EmailService {
       const template = await this.loadTemplate("attendance-report");
       if (!template) {
         console.warn(
-          `⚠️  Template not found - Attendance report email skipped for ${teacherEmail}`
+          `⚠️  Template not found - Attendance report email skipped for ${teacherEmail}`,
         );
         return { skipped: true, reason: "Template not found" };
       }
@@ -218,7 +224,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Failed to send attendance report (skipped):",
-        error.message
+        error.message,
       );
       return { skipped: true, reason: error.message };
     }
@@ -233,7 +239,7 @@ class EmailService {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - Welcome email skipped for ${teacherEmail}`
+          `⚠️  Email service not configured - Welcome email skipped for ${teacherEmail}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -241,7 +247,7 @@ class EmailService {
       const template = await this.loadTemplate("welcome");
       if (!template) {
         console.warn(
-          `⚠️  Template not found - Welcome email skipped for ${teacherEmail}`
+          `⚠️  Template not found - Welcome email skipped for ${teacherEmail}`,
         );
         return { skipped: true, reason: "Template not found" };
       }
@@ -266,7 +272,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Failed to send welcome email (skipped):",
-        error.message
+        error.message,
       );
       return { skipped: true, reason: error.message };
     }
@@ -280,13 +286,13 @@ class EmailService {
     targetCourse,
     studentCount,
     message,
-    requestId
+    requestId,
   ) {
     try {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - Student share request email skipped for ${targetTeacherEmail}`
+          `⚠️  Email service not configured - Student share request email skipped for ${targetTeacherEmail}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -294,7 +300,7 @@ class EmailService {
       const template = await this.loadTemplate("student-share-request");
       if (!template) {
         console.warn(
-          `⚠️  Template not found - Student share request email skipped for ${targetTeacherEmail}`
+          `⚠️  Template not found - Student share request email skipped for ${targetTeacherEmail}`,
         );
         return { skipped: true, reason: "Template not found" };
       }
@@ -326,7 +332,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Failed to send student share request email (skipped):",
-        error.message
+        error.message,
       );
       return { skipped: true, reason: error.message };
     }
@@ -340,13 +346,13 @@ class EmailService {
     sourceCourse,
     approved,
     studentCount,
-    responseMessage
+    responseMessage,
   ) {
     try {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - Student share response email skipped for ${requesterEmail}`
+          `⚠️  Email service not configured - Student share response email skipped for ${requesterEmail}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -354,7 +360,7 @@ class EmailService {
       const template = await this.loadTemplate("student-share-response");
       if (!template) {
         console.warn(
-          `⚠️  Template not found - Student share response email skipped for ${requesterEmail}`
+          `⚠️  Template not found - Student share response email skipped for ${requesterEmail}`,
         );
         return { skipped: true, reason: "Template not found" };
       }
@@ -387,7 +393,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Failed to send student share response email (skipped):",
-        error.message
+        error.message,
       );
       return { skipped: true, reason: error.message };
     }
@@ -398,7 +404,7 @@ class EmailService {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - Support request email skipped for ${adminEmail}`
+          `⚠️  Email service not configured - Support request email skipped for ${adminEmail}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -406,7 +412,7 @@ class EmailService {
       const template = await this.loadTemplate("support-request");
       if (!template) {
         console.warn(
-          `⚠️  Template not found - Support request email skipped for ${adminEmail}`
+          `⚠️  Template not found - Support request email skipped for ${adminEmail}`,
         );
         return { skipped: true, reason: "Template not found" };
       }
@@ -461,7 +467,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Failed to send support request email to admin (skipped):",
-        error.message
+        error.message,
       );
       return { skipped: true, reason: error.message };
     }
@@ -472,7 +478,7 @@ class EmailService {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - Support confirmation email skipped for ${userEmail}`
+          `⚠️  Email service not configured - Support confirmation email skipped for ${userEmail}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -480,7 +486,7 @@ class EmailService {
       const template = await this.loadTemplate("support-confirmation");
       if (!template) {
         console.warn(
-          `⚠️  Template not found - Support confirmation email skipped for ${userEmail}`
+          `⚠️  Template not found - Support confirmation email skipped for ${userEmail}`,
         );
         return { skipped: true, reason: "Template not found" };
       }
@@ -527,7 +533,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Failed to send support confirmation email (skipped):",
-        error.message
+        error.message,
       );
       return { skipped: true, reason: error.message };
     }
@@ -550,7 +556,7 @@ class EmailService {
       // Check if email service is configured
       if (!this.transporter) {
         console.warn(
-          `⚠️  Email service not configured - Course assignment notification skipped for ${lecturer_email}`
+          `⚠️  Email service not configured - Course assignment notification skipped for ${lecturer_email}`,
         );
         return { skipped: true, reason: "Email service not configured" };
       }
@@ -558,7 +564,7 @@ class EmailService {
       const template = await this.loadTemplate("course-assignment");
       if (!template) {
         console.warn(
-          `⚠️  Template not found - Course assignment notification skipped for ${lecturer_email}`
+          `⚠️  Template not found - Course assignment notification skipped for ${lecturer_email}`,
         );
         return { skipped: true, reason: "Template not found" };
       }
@@ -603,7 +609,7 @@ class EmailService {
     } catch (error) {
       console.error(
         "⚠️  Failed to send course assignment notification (skipped):",
-        error.message
+        error.message,
       );
       return { skipped: true, reason: error.message };
     }

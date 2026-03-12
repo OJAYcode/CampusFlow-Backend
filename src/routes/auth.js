@@ -58,7 +58,7 @@ router.post(
       // Generate OTP for email verification
       const otp = generateOTP();
       const otpExpiry = new Date(
-        Date.now() + 60 * 60 * 1000 // 1 hour expiry
+        Date.now() + 60 * 60 * 1000, // 1 hour expiry
       );
 
       // Create temporary teacher record with OTP
@@ -79,20 +79,26 @@ router.post(
       const registrationToken = jwt.sign(
         { userId: tempTeacher._id, email, step: "otp_verification" },
         process.env.JWT_SECRET,
-        { expiresIn: "1h" }
+        { expiresIn: "1h" },
       );
 
       // Send OTP email in the background (don't block the response)
-      emailService.sendOTP(email, otp, "account registration")
+      emailService
+        .sendOTP(email, otp, "account registration")
         .then((emailResult) => {
           if (emailResult && emailResult.skipped) {
-            console.warn(`⚠️  Registration OTP could not be sent to ${email}. Reason: ${emailResult.reason}`);
+            console.warn(
+              `⚠️  Registration OTP could not be sent to ${email}. Reason: ${emailResult.reason}`,
+            );
           } else {
             console.log(`✅ Registration OTP sent to ${email}`);
           }
         })
         .catch((err) => {
-          console.error(`⚠️  Failed to send registration OTP to ${email}:`, err.message);
+          console.error(
+            `⚠️  Failed to send registration OTP to ${email}:`,
+            err.message,
+          );
         });
 
       res.status(200).json({
@@ -104,7 +110,7 @@ router.post(
       console.error("Registration error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  }
+  },
 );
 
 // Verify OTP and complete registration
@@ -153,7 +159,7 @@ router.post(
           teacher.email,
           teacher.name,
           null, // No password to send since they set it during registration
-          `${process.env.FRONTEND_URL || "http://localhost:3000"}/auth/sigin`
+          `${process.env.FRONTEND_URL || "http://localhost:3000"}/auth/sigin`,
         );
       } catch (emailError) {
         console.error("Failed to send welcome email:", emailError);
@@ -164,7 +170,7 @@ router.post(
       const token = jwt.sign(
         { id: teacher._id, email: teacher.email, role: teacher.role },
         process.env.JWT_SECRET,
-        { expiresIn: "24h" }
+        { expiresIn: "24h" },
       );
 
       // Update last login
@@ -180,7 +186,7 @@ router.post(
       console.error("OTP verification error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  }
+  },
 );
 
 // Login (supports both teachers and admins)
@@ -227,7 +233,7 @@ router.post(
         "User type:",
         userType,
         "Email verified:",
-        user.email_verified
+        user.email_verified,
       );
       if (userType === "teacher" && !user.email_verified) {
         console.log("User is unverified, sending new OTP");
@@ -246,20 +252,26 @@ router.post(
         const verificationToken = jwt.sign(
           { id: user._id, email: user.email, step: "email_verification" },
           process.env.JWT_SECRET,
-          { expiresIn: "1h" }
+          { expiresIn: "1h" },
         );
 
         // Send OTP email in the background (don't block the response)
-        emailService.sendOTP(user.email, otp, "email verification")
+        emailService
+          .sendOTP(user.email, otp, "email verification")
           .then((emailResult) => {
             if (emailResult && emailResult.skipped) {
-              console.warn(`⚠️  Verification OTP could not be sent to ${user.email}. Reason: ${emailResult.reason}`);
+              console.warn(
+                `⚠️  Verification OTP could not be sent to ${user.email}. Reason: ${emailResult.reason}`,
+              );
             } else {
               console.log(`✅ Verification OTP sent to ${user.email}`);
             }
           })
           .catch((err) => {
-            console.error(`⚠️  Failed to send verification OTP to ${user.email}:`, err.message);
+            console.error(
+              `⚠️  Failed to send verification OTP to ${user.email}:`,
+              err.message,
+            );
           });
 
         console.log("Returning verification response");
@@ -276,7 +288,7 @@ router.post(
       const token = jwt.sign(
         { id: user._id, email: user.email, role: user.role, userType },
         process.env.JWT_SECRET,
-        { expiresIn: "24h" }
+        { expiresIn: "24h" },
       );
 
       // Update last login
@@ -293,7 +305,7 @@ router.post(
       console.error("Login error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  }
+  },
 );
 
 // Logout
@@ -387,20 +399,26 @@ router.post(
       const newVerificationToken = jwt.sign(
         { id: user._id, email: user.email, step: "email_verification" },
         process.env.JWT_SECRET,
-        { expiresIn: "1h" }
+        { expiresIn: "1h" },
       );
 
       // Send OTP email in the background (don't block the response)
-      emailService.sendOTP(email, otp, "email verification")
+      emailService
+        .sendOTP(email, otp, "email verification")
         .then((emailResult) => {
           if (emailResult && emailResult.skipped) {
-            console.warn(`⚠️  Verification OTP could not be sent to ${email}. Reason: ${emailResult.reason}`);
+            console.warn(
+              `⚠️  Verification OTP could not be sent to ${email}. Reason: ${emailResult.reason}`,
+            );
           } else {
             console.log(`✅ Verification OTP sent to ${email}`);
           }
         })
         .catch((err) => {
-          console.error(`⚠️  Failed to send verification OTP to ${email}:`, err.message);
+          console.error(
+            `⚠️  Failed to send verification OTP to ${email}:`,
+            err.message,
+          );
         });
 
       res.json({
@@ -411,7 +429,7 @@ router.post(
       console.error("Request verification code error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  }
+  },
 );
 
 // Verify email with OTP
@@ -461,7 +479,7 @@ router.post(
           user.email,
           user.name,
           null, // No password to send
-          `${process.env.FRONTEND_URL || "http://localhost:3000"}/login`
+          `${process.env.FRONTEND_URL || "http://localhost:3000"}/login`,
         );
       } catch (emailError) {
         console.error("Failed to send welcome email:", emailError);
@@ -477,7 +495,7 @@ router.post(
           userType: "teacher",
         },
         process.env.JWT_SECRET,
-        { expiresIn: "24h" }
+        { expiresIn: "24h" },
       );
 
       // Update last login
@@ -494,7 +512,7 @@ router.post(
       console.error("Email verification error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  }
+  },
 );
 
 // Request OTP (for password reset)
@@ -535,14 +553,17 @@ router.post(
       await teacher.save();
 
       // Send OTP email in the background (don't block the response)
-      const sendOTPPromise = purpose === "password_reset"
-        ? emailService.sendPasswordResetOTP(email, otp)
-        : emailService.sendOTP(email, otp, purpose);
+      const sendOTPPromise =
+        purpose === "password_reset"
+          ? emailService.sendPasswordResetOTP(email, otp)
+          : emailService.sendOTP(email, otp, purpose);
 
       sendOTPPromise
         .then((emailResult) => {
           if (emailResult && emailResult.skipped) {
-            console.warn(`⚠️  OTP generated but email could not be sent to ${email}. Reason: ${emailResult.reason}`);
+            console.warn(
+              `⚠️  OTP generated but email could not be sent to ${email}. Reason: ${emailResult.reason}`,
+            );
           } else {
             console.log(`✅ OTP sent to ${email} for ${purpose}`);
           }
@@ -556,7 +577,7 @@ router.post(
       console.error("OTP request error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  }
+  },
 );
 
 // Verify OTP
@@ -620,7 +641,7 @@ router.post(
       console.error("OTP verification error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  }
+  },
 );
 
 /**
@@ -655,7 +676,7 @@ router.put(
       .withMessage("New password must be at least 8 characters")
       .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
       .withMessage(
-        "New password must contain at least one uppercase letter, one lowercase letter, and one number"
+        "New password must contain at least one uppercase letter, one lowercase letter, and one number",
       ),
     body("confirmPassword")
       .optional()
@@ -700,7 +721,7 @@ router.put(
         // Verify current password
         const isCurrentPasswordValid = await bcrypt.compare(
           currentPassword,
-          user.password_hash
+          user.password_hash,
         );
         if (!isCurrentPasswordValid) {
           return res.status(400).json({
@@ -762,7 +783,7 @@ router.put(
       // Handle validation errors
       if (error.name === "ValidationError") {
         const validationErrors = Object.values(error.errors).map(
-          (err) => err.message
+          (err) => err.message,
         );
         return res.status(400).json({
           error: "Validation failed",
@@ -775,7 +796,7 @@ router.put(
         details: ["Failed to update profile. Please try again later."],
       });
     }
-  }
+  },
 );
 
 // Get current user profile - for both teachers and admins
@@ -789,7 +810,7 @@ router.get("/profile", auth, async (req, res) => {
 
     // Find the user (excluding password)
     const user = await UserModel.findById(userId).select(
-      "-password_hash -otp -otp_expires_at"
+      "-password_hash -otp -otp_expires_at",
     );
 
     if (!user) {
