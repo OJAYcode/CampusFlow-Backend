@@ -25,6 +25,9 @@ class EmailService {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,
           },
+          connectionTimeout: 10000, // 10 seconds to connect
+          socketTimeout: 15000, // 15 seconds for socket inactivity
+          greetingTimeout: 10000, // 10 seconds for greeting
         });
         console.log("✅ Email service configured with host:", process.env.EMAIL_HOST);
       }

@@ -75,36 +75,25 @@ router.post(
 
       await tempTeacher.save();
 
-      // Send OTP email
-      const emailResult = await emailService.sendOTP(
-        email,
-        otp,
-        "account registration"
-      );
-
-      // Check if email was actually sent or skipped
-      if (emailResult && emailResult.skipped) {
-        console.warn(`⚠️  Registration OTP could not be sent to ${email}. Reason: ${emailResult.reason}`);
-        // Rollback - delete the temporary teacher record
-        await Teacher.findByIdAndDelete(tempTeacher._id);
-
-        return res.status(503).json({
-          error: "Email service unavailable",
-          message:
-            "We're having trouble sending emails right now. Please try again later or contact support.",
-          details:
-            "Registration cannot be completed without email verification.",
-          reason: emailResult.reason,
-          otp_for_dev: process.env.NODE_ENV === "development" ? otp : undefined, // Only in dev mode
-        });
-      }
-
-      // Store registration data temporarily (in production, use Redis or similar)
+      // Store registration data temporarily
       const registrationToken = jwt.sign(
         { userId: tempTeacher._id, email, step: "otp_verification" },
         process.env.JWT_SECRET,
         { expiresIn: "1h" }
       );
+
+      // Send OTP email in the background (don't block the response)
+      emailService.sendOTP(email, otp, "account registration")
+        .then((emailResult) => {
+          if (emailResult && emailResult.skipped) {
+            console.warn(`⚠️  Registration OTP could not be sent to ${email}. Reason: ${emailResult.reason}`);
+          } else {
+            console.log(`✅ Registration OTP sent to ${email}`);
+          }
+        })
+        .catch((err) => {
+          console.error(`⚠️  Failed to send registration OTP to ${email}:`, err.message);
+        });
 
       res.status(200).json({
         message:
@@ -253,36 +242,25 @@ router.post(
         user.otp_purpose = "email_verification";
         await user.save();
 
-        console.log("Sending OTP email...");
-        // Send OTP email
-        const emailResult = await emailService.sendOTP(
-          user.email,
-          otp,
-          "email verification"
-        );
-
-        // Check if email was actually sent or skipped
-        if (emailResult && emailResult.skipped) {
-          console.warn(
-            `⚠️  Verification OTP could not be sent to ${user.email}`
-          );
-          return res.status(503).json({
-            error: "Email service unavailable",
-            message:
-              "We're having trouble sending emails right now. Please try again later or contact support.",
-            details: "Email verification code could not be delivered.",
-            needsVerification: true,
-            otp_for_dev:
-              process.env.NODE_ENV === "development" ? otp : undefined, // Only in dev mode
-          });
-        }
-
         // Generate verification token
         const verificationToken = jwt.sign(
           { id: user._id, email: user.email, step: "email_verification" },
           process.env.JWT_SECRET,
           { expiresIn: "1h" }
         );
+
+        // Send OTP email in the background (don't block the response)
+        emailService.sendOTP(user.email, otp, "email verification")
+          .then((emailResult) => {
+            if (emailResult && emailResult.skipped) {
+              console.warn(`⚠️  Verification OTP could not be sent to ${user.email}. Reason: ${emailResult.reason}`);
+            } else {
+              console.log(`✅ Verification OTP sent to ${user.email}`);
+            }
+          })
+          .catch((err) => {
+            console.error(`⚠️  Failed to send verification OTP to ${user.email}:`, err.message);
+          });
 
         console.log("Returning verification response");
         return res.status(403).json({
@@ -405,32 +383,25 @@ router.post(
       user.otp_purpose = "email_verification";
       await user.save();
 
-      // Send OTP email
-      const emailResult = await emailService.sendOTP(
-        email,
-        otp,
-        "email verification"
-      );
-
-      // Check if email was actually sent or skipped
-      if (emailResult && emailResult.skipped) {
-        console.warn(`⚠️  Verification OTP could not be sent to ${email}`);
-        return res.status(503).json({
-          error: "Email service unavailable",
-          message:
-            "We're having trouble sending emails right now. Please try again later or contact support.",
-          details:
-            "Verification code could not be delivered to your email address.",
-          otp_for_dev: process.env.NODE_ENV === "development" ? otp : undefined, // Only in dev mode
-        });
-      }
-
       // Generate new verification token
       const newVerificationToken = jwt.sign(
         { id: user._id, email: user.email, step: "email_verification" },
         process.env.JWT_SECRET,
         { expiresIn: "1h" }
       );
+
+      // Send OTP email in the background (don't block the response)
+      emailService.sendOTP(email, otp, "email verification")
+        .then((emailResult) => {
+          if (emailResult && emailResult.skipped) {
+            console.warn(`⚠️  Verification OTP could not be sent to ${email}. Reason: ${emailResult.reason}`);
+          } else {
+            console.log(`✅ Verification OTP sent to ${email}`);
+          }
+        })
+        .catch((err) => {
+          console.error(`⚠️  Failed to send verification OTP to ${email}:`, err.message);
+        });
 
       res.json({
         message: "New verification code sent to your email",
@@ -563,27 +534,22 @@ router.post(
       teacher.otp_purpose = purpose;
       await teacher.save();
 
-      // Send OTP email
-      let emailResult;
-      if (purpose === "password_reset") {
-        emailResult = await emailService.sendPasswordResetOTP(email, otp);
-      } else {
-        emailResult = await emailService.sendOTP(email, otp, purpose);
-      }
+      // Send OTP email in the background (don't block the response)
+      const sendOTPPromise = purpose === "password_reset"
+        ? emailService.sendPasswordResetOTP(email, otp)
+        : emailService.sendOTP(email, otp, purpose);
 
-      // Check if email was actually sent or skipped
-      if (emailResult && emailResult.skipped) {
-        console.warn(
-          `⚠️  OTP generated but email could not be sent to ${email}`
-        );
-        return res.status(503).json({
-          error: "Email service unavailable",
-          message:
-            "We're having trouble sending emails right now. Please try again later or contact support.",
-          details: "The OTP could not be delivered to your email address.",
-          otp_for_dev: process.env.NODE_ENV === "development" ? otp : undefined, // Only in dev mode
+      sendOTPPromise
+        .then((emailResult) => {
+          if (emailResult && emailResult.skipped) {
+            console.warn(`⚠️  OTP generated but email could not be sent to ${email}. Reason: ${emailResult.reason}`);
+          } else {
+            console.log(`✅ OTP sent to ${email} for ${purpose}`);
+          }
+        })
+        .catch((err) => {
+          console.error(`⚠️  Failed to send OTP to ${email}:`, err.message);
         });
-      }
 
       res.json({ message: "If the email exists, an OTP has been sent." });
     } catch (error) {
