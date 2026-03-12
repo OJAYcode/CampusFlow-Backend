@@ -5,8 +5,6 @@ const path = require("path");
 
 class EmailService {
   constructor() {
-    this.emailEnabled = true;
-
     try {
       // Check if email configuration is available
       if (
@@ -17,32 +15,18 @@ class EmailService {
         console.warn(
           "⚠️  Email service disabled: Missing email configuration (EMAIL_HOST, EMAIL_USER, or EMAIL_PASS)"
         );
-        this.emailEnabled = false;
         this.transporter = null;
       } else {
         this.transporter = nodemailer.createTransport({
           host: process.env.EMAIL_HOST,
-          port: process.env.EMAIL_PORT,
+          port: parseInt(process.env.EMAIL_PORT) || 587,
           secure: false, // true for 465, false for other ports
           auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,
           },
         });
-
-        // Test connection (non-blocking)
-        this.transporter.verify((error, success) => {
-          if (error) {
-            console.error(
-              "⚠️  Email service connection failed (emails will be skipped):",
-              error.message
-            );
-            this.emailEnabled = false;
-          } else {
-            console.log("✅ Email service is ready");
-            this.emailEnabled = true;
-          }
-        });
+        console.log("✅ Email service configured with host:", process.env.EMAIL_HOST);
       }
 
       // Register Handlebars helpers
@@ -86,12 +70,12 @@ class EmailService {
 
   async sendOTP(email, otp, purpose = "verification") {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - OTP email skipped for ${email}`
+          `⚠️  Email service not configured - OTP email skipped for ${email}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("otp");
@@ -137,12 +121,12 @@ class EmailService {
     sessionCode
   ) {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - Session notification skipped for ${teacherEmail}`
+          `⚠️  Email service not configured - Session notification skipped for ${teacherEmail}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("session-notification");
@@ -187,12 +171,12 @@ class EmailService {
     format = "csv"
   ) {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - Attendance report email skipped for ${teacherEmail}`
+          `⚠️  Email service not configured - Attendance report email skipped for ${teacherEmail}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("attendance-report");
@@ -243,12 +227,12 @@ class EmailService {
 
   async sendWelcomeEmail(teacherEmail, teacherName, temporaryPassword) {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - Welcome email skipped for ${teacherEmail}`
+          `⚠️  Email service not configured - Welcome email skipped for ${teacherEmail}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("welcome");
@@ -296,12 +280,12 @@ class EmailService {
     requestId
   ) {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - Student share request email skipped for ${targetTeacherEmail}`
+          `⚠️  Email service not configured - Student share request email skipped for ${targetTeacherEmail}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("student-share-request");
@@ -356,12 +340,12 @@ class EmailService {
     responseMessage
   ) {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - Student share response email skipped for ${requesterEmail}`
+          `⚠️  Email service not configured - Student share response email skipped for ${requesterEmail}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("student-share-response");
@@ -408,12 +392,12 @@ class EmailService {
 
   async sendSupportRequestToAdmin(adminEmail, supportData) {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - Support request email skipped for ${adminEmail}`
+          `⚠️  Email service not configured - Support request email skipped for ${adminEmail}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("support-request");
@@ -482,12 +466,12 @@ class EmailService {
 
   async sendSupportConfirmation(userEmail, supportData) {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - Support confirmation email skipped for ${userEmail}`
+          `⚠️  Email service not configured - Support confirmation email skipped for ${userEmail}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("support-confirmation");
@@ -560,12 +544,12 @@ class EmailService {
     login_url = process.env.FRONTEND_URL || "http://localhost:3000",
   }) {
     try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
+      // Check if email service is configured
+      if (!this.transporter) {
         console.warn(
-          `⚠️  Email service disabled - Course assignment notification skipped for ${lecturer_email}`
+          `⚠️  Email service not configured - Course assignment notification skipped for ${lecturer_email}`
         );
-        return { skipped: true, reason: "Email service not available" };
+        return { skipped: true, reason: "Email service not configured" };
       }
 
       const template = await this.loadTemplate("course-assignment");
