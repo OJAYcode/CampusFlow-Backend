@@ -1,4 +1,4 @@
-const Brevo = require("@getbrevo/brevo");
+const { BrevoClient } = require("@getbrevo/brevo");
 const handlebars = require("handlebars");
 const fs = require("fs").promises;
 const path = require("path");
@@ -12,11 +12,7 @@ class EmailService {
         );
         this.client = null;
       } else {
-        this.client = new Brevo.TransactionalEmailsApi();
-        this.client.setApiKey(
-          Brevo.TransactionalEmailsApiApiKeys.apiKey,
-          process.env.BREVO_API_KEY,
-        );
+        this.client = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
         this.senderEmail =
           process.env.EMAIL_FROM_ADDRESS || "a4b171001@smtp-brevo.com";
         this.senderName = process.env.EMAIL_FROM_NAME || "UniTrack";
@@ -50,11 +46,12 @@ class EmailService {
       return { skipped: true, reason: "Email service not configured" };
     }
     try {
-      const email = new Brevo.SendSmtpEmail();
-      email.sender = { name: this.senderName, email: this.senderEmail };
-      email.to = [{ email: to }];
-      email.subject = subject;
-      email.htmlContent = html;
+      const email = {
+        sender: { name: this.senderName, email: this.senderEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      };
 
       if (attachments.length > 0) {
         email.attachment = attachments.map((a) => ({
@@ -65,8 +62,8 @@ class EmailService {
         }));
       }
 
-      const result = await this.client.sendTransacEmail(email);
-      console.log(`✅ Email sent to ${to} — messageId: ${result.body?.messageId || "ok"}`);
+      const result = await this.client.transactionalEmails.sendTransacEmail(email);
+      console.log(`✅ Email sent to ${to} — messageId: ${result?.messageId || "ok"}`);
       return result;
     } catch (error) {
       console.error(`⚠️  Failed to send email to ${to}:`, error.message);
