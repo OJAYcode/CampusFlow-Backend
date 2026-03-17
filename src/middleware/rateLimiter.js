@@ -1,5 +1,13 @@
 const rateLimit = require("express-rate-limit");
 
+const emailAndIpKey = (req) => {
+  const email =
+    typeof req.body?.email === "string"
+      ? req.body.email.trim().toLowerCase()
+      : "";
+  return `${req.ip}:${email}`;
+};
+
 // General rate limiter
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -20,10 +28,35 @@ const strictLimiter = rateLimit({
 
 // OTP rate limiter
 const otpLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 1, // Only 1 OTP request per minute
+  windowMs: parseInt(process.env.OTP_RATE_LIMIT_WINDOW_MS) || 60 * 1000, // 1 minute
+  max: parseInt(process.env.OTP_RATE_LIMIT_MAX_REQUESTS) || 3, // Allow brief retries without abuse
+  keyGenerator: emailAndIpKey,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
-    error: "Please wait before requesting another OTP.",
+    error: "Too many OTP requests. Please wait before trying again.",
+  },
+});
+
+// Verification code resend limiter (signup/email verification flow)
+const verificationCodeLimiter = rateLimit({
+  windowMs:
+    parseInt(process.env.VERIFICATION_CODE_RATE_LIMIT_WINDOW_MS) || 60 * 1000, // 1 minute
+  max: parseInt(process.env.VERIFICATION_CODE_RATE_LIMIT_MAX_REQUESTS) || 2, // Max 2 resends per minute
+  keyGenerator: emailAndIpKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const resetTime = req.rateLimit?.resetTime;
+    const retryAfterSeconds = resetTime
+      ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
+      : 60;
+
+    res.set("Retry-After", String(retryAfterSeconds));
+    return res.status(429).json({
+      error: "Please wait before requesting another verification code.",
+      retryAfterSeconds,
+    });
   },
 });
 
@@ -50,6 +83,7 @@ module.exports = {
   generalLimiter,
   strictLimiter,
   otpLimiter,
+  verificationCodeLimiter,
   attendanceLimiter,
   supportLimiter,
 };

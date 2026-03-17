@@ -12,7 +12,11 @@ const {
   isValidEmail,
 } = require("../utils/helpers");
 const validate = require("../middleware/validation");
-const { strictLimiter, otpLimiter } = require("../middleware/rateLimiter");
+const {
+  strictLimiter,
+  otpLimiter,
+  verificationCodeLimiter,
+} = require("../middleware/rateLimiter");
 const auditLogger = require("../middleware/auditLogger");
 const { auth } = require("../middleware/auth");
 
@@ -340,7 +344,7 @@ router.post("/logout", auth, auditLogger("user_logout"), async (req, res) => {
 // Request new verification code
 router.post(
   "/request_verification_code",
-  otpLimiter,
+  verificationCodeLimiter,
   [
     body("email")
       .isEmail()
