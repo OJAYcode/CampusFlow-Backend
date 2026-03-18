@@ -260,24 +260,28 @@ router.post(
           { expiresIn: "1h" },
         );
 
-        // Send OTP email in the background (don't block the response)
-        emailService
-          .sendOTP(user.email, otp, "email verification")
-          .then((emailResult) => {
-            if (emailResult && emailResult.skipped) {
-              console.warn(
-                `⚠️  Verification OTP could not be sent to ${user.email}. Reason: ${emailResult.reason}`,
-              );
-            } else {
-              console.log(`✅ Verification OTP sent to ${user.email}`);
-            }
-          })
-          .catch((err) => {
-            console.error(
-              `⚠️  Failed to send verification OTP to ${user.email}:`,
-              err.message,
-            );
+        // Send OTP email and return explicit failure if delivery is unavailable
+        const emailResult = await emailService.sendOTP(
+          user.email,
+          otp,
+          "email verification",
+        );
+
+        if (emailResult && emailResult.skipped) {
+          console.warn(
+            `⚠️  Verification OTP could not be sent to ${user.email}. Reason: ${emailResult.reason}`,
+          );
+          return res.status(503).json({
+            error: "Verification email service unavailable",
+            message:
+              "Your account is not verified and we could not send a verification code right now. Please try again shortly.",
+            reason: emailResult.reason,
+            needsVerification: true,
+            verificationToken,
           });
+        }
+
+        console.log(`✅ Verification OTP sent to ${user.email}`);
 
         console.log("Returning verification response");
         return res.status(403).json({
