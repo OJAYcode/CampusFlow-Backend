@@ -86,24 +86,25 @@ router.post(
         { expiresIn: "1h" },
       );
 
-      // Send OTP email in the background (don't block the response)
-      emailService
-        .sendOTP(email, otp, "account registration")
-        .then((emailResult) => {
-          if (emailResult && emailResult.skipped) {
-            console.warn(
-              `⚠️  Registration OTP could not be sent to ${email}. Reason: ${emailResult.reason}`,
-            );
-          } else {
-            console.log(`✅ Registration OTP sent to ${email}`);
-          }
-        })
-        .catch((err) => {
-          console.error(
-            `⚠️  Failed to send registration OTP to ${email}:`,
-            err.message,
-          );
+      // Send OTP email and fail fast if delivery is unavailable
+      const emailResult = await emailService.sendOTP(
+        email,
+        otp,
+        "account registration",
+      );
+      if (emailResult && emailResult.skipped) {
+        console.warn(
+          `⚠️  Registration OTP could not be sent to ${email}. Reason: ${emailResult.reason}`,
+        );
+        return res.status(503).json({
+          error: "Verification email service unavailable",
+          message:
+            "We could not send your verification code right now. Please try again shortly.",
+          reason: emailResult.reason,
         });
+      }
+
+      console.log(`✅ Registration OTP sent to ${email}`);
 
       res.status(200).json({
         message:
@@ -359,19 +360,22 @@ router.post(
   async (req, res) => {
     try {
       const { email, verificationToken } = req.body;
+      let tokenStep = "email_verification";
+      let tokenUserId = null;
 
       // If verification token is provided, verify it
       if (verificationToken) {
         try {
           const decoded = jwt.verify(verificationToken, process.env.JWT_SECRET);
-          if (
-            decoded.step !== "email_verification" ||
-            decoded.email !== email
-          ) {
+          const supportedSteps = ["email_verification", "otp_verification"];
+          if (!supportedSteps.includes(decoded.step) || decoded.email !== email) {
             return res
               .status(400)
               .json({ error: "Invalid verification token" });
           }
+
+          tokenStep = decoded.step;
+          tokenUserId = decoded.id || decoded.userId || null;
         } catch (error) {
           return res
             .status(400)
@@ -385,6 +389,10 @@ router.post(
         return res.status(404).json({ error: "User not found" });
       }
 
+      if (tokenUserId && String(user._id) !== String(tokenUserId)) {
+        return res.status(400).json({ error: "Invalid verification token" });
+      }
+
       if (user.email_verified) {
         return res.status(400).json({ error: "Email is already verified" });
       }
@@ -396,38 +404,51 @@ router.post(
       // Save OTP to user record
       user.otp = otp;
       user.otp_expires_at = otpExpiry;
-      user.otp_purpose = "email_verification";
+      user.otp_purpose =
+        tokenStep === "otp_verification" ? "registration" : "email_verification";
       await user.save();
 
-      // Generate new verification token
-      const newVerificationToken = jwt.sign(
-        { id: user._id, email: user.email, step: "email_verification" },
+      // Generate flow-specific token
+      const newTokenPayload =
+        tokenStep === "otp_verification"
+          ? { userId: user._id, email: user.email, step: "otp_verification" }
+          : { id: user._id, email: user.email, step: "email_verification" };
+
+      const newFlowToken = jwt.sign(
+        newTokenPayload,
         process.env.JWT_SECRET,
         { expiresIn: "1h" },
       );
 
-      // Send OTP email in the background (don't block the response)
-      emailService
-        .sendOTP(email, otp, "email verification")
-        .then((emailResult) => {
-          if (emailResult && emailResult.skipped) {
-            console.warn(
-              `⚠️  Verification OTP could not be sent to ${email}. Reason: ${emailResult.reason}`,
-            );
-          } else {
-            console.log(`✅ Verification OTP sent to ${email}`);
-          }
-        })
-        .catch((err) => {
-          console.error(
-            `⚠️  Failed to send verification OTP to ${email}:`,
-            err.message,
-          );
+      // Send OTP email and report delivery failures
+      const emailResult = await emailService.sendOTP(
+        email,
+        otp,
+        tokenStep === "otp_verification"
+          ? "account registration"
+          : "email verification",
+      );
+
+      if (emailResult && emailResult.skipped) {
+        console.warn(
+          `⚠️  Verification OTP could not be sent to ${email}. Reason: ${emailResult.reason}`,
+        );
+        return res.status(503).json({
+          error: "Verification email service unavailable",
+          message:
+            "We could not send your verification code right now. Please try again shortly.",
+          reason: emailResult.reason,
         });
+      }
+
+      console.log(`✅ Verification OTP sent to ${email}`);
 
       res.json({
         message: "New verification code sent to your email",
-        verificationToken: newVerificationToken,
+        verificationToken:
+          tokenStep === "email_verification" ? newFlowToken : undefined,
+        registrationToken:
+          tokenStep === "otp_verification" ? newFlowToken : undefined,
       });
     } catch (error) {
       console.error("Request verification code error:", error);
