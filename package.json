@@ -19,6 +19,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@getbrevo/brevo": "^5.0.1",
     "axios": "^1.11.0",
     "bcrypt": "^5.1.0",
     "cors": "^2.8.5",

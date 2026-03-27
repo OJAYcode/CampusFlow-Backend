@@ -2408,14 +2408,17 @@ router.get("/health", adminAuth, async (req, res) => {
     async function checkEmailServiceHealth() {
       try {
         // Test email service configuration
+        const hasBrevoKey = !!(
+          process.env.BREVO_API_KEY || process.env.EMAIL_PASS
+        );
+        const senderAddress =
+          process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_FROM || null;
+
         const emailConfig = {
-          configured: !!(
-            process.env.EMAIL_HOST &&
-            process.env.EMAIL_PORT &&
-            process.env.EMAIL_USER
-          ),
-          host: process.env.EMAIL_HOST || "not_configured",
-          port: process.env.EMAIL_PORT || "not_configured",
+          provider: "brevo",
+          configured: hasBrevoKey && !!senderAddress,
+          api_key_configured: hasBrevoKey,
+          sender_address: senderAddress || "not_configured",
         };
         return {
           status: emailConfig.configured ? "configured" : "not_configured",

@@ -1,59 +1,33 @@
-const nodemailer = require("nodemailer");
+const { BrevoClient } = require("@getbrevo/brevo");
 const handlebars = require("handlebars");
 const fs = require("fs").promises;
 const path = require("path");
 
 class EmailService {
   constructor() {
-    this.emailEnabled = true;
-
     try {
-      // Check if email configuration is available
-      if (
-        !process.env.EMAIL_HOST ||
-        !process.env.EMAIL_USER ||
-        !process.env.EMAIL_PASS
-      ) {
+      const configuredApiKey =
+        (process.env.BREVO_API_KEY || process.env.EMAIL_PASS || "").trim();
+
+      if (!configuredApiKey) {
         console.warn(
-          "⚠️  Email service disabled: Missing email configuration (EMAIL_HOST, EMAIL_USER, or EMAIL_PASS)"
+          "⚠️  Email service disabled: Missing BREVO_API_KEY (or EMAIL_PASS) environment variable",
         );
-        this.emailEnabled = false;
-        this.transporter = null;
+        this.client = null;
       } else {
-        const smtpPort = parseInt(process.env.EMAIL_PORT, 10) || 587;
-        const smtpSecure =
-          process.env.EMAIL_SECURE === "true" ||
-          (process.env.EMAIL_SECURE !== "false" && smtpPort === 465);
-        const connectionTimeout =
-          parseInt(process.env.EMAIL_CONNECTION_TIMEOUT_MS, 10) || 15000;
+        if (configuredApiKey.startsWith("xsmtpsib-")) {
+          console.warn(
+            "⚠️  BREVO_API_KEY appears to be an SMTP key (xsmtpsib-). Use a Brevo API key from SMTP & API > API Keys.",
+          );
+        }
 
-        this.transporter = nodemailer.createTransport({
-          host: process.env.EMAIL_HOST,
-          port: smtpPort,
-          secure: smtpSecure,
-          connectionTimeout,
-          greetingTimeout: connectionTimeout,
-          socketTimeout:
-            parseInt(process.env.EMAIL_SOCKET_TIMEOUT_MS, 10) || 30000,
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-          },
-        });
-
-        // Test connection (non-blocking)
-        this.transporter.verify((error, success) => {
-          if (error) {
-            console.error(
-              "⚠️  Email service connection failed (emails will be skipped):",
-              error.message
-            );
-            this.emailEnabled = false;
-          } else {
-            console.log("✅ Email service is ready");
-            this.emailEnabled = true;
-          }
-        });
+        this.client = new BrevoClient({ apiKey: configuredApiKey });
+        this.senderEmail =
+          process.env.EMAIL_FROM_ADDRESS ||
+          process.env.EMAIL_FROM ||
+          "a4b171001@smtp-brevo.com";
+        this.senderName = process.env.EMAIL_FROM_NAME || "UniTrack";
+        console.log("✅ Brevo email service configured");
       }
 
       // Register Handlebars helpers
@@ -68,12 +42,68 @@ class EmailService {
         return options.inverse(this);
       });
     } catch (error) {
-      console.error(
-        "⚠️  Email service initialization failed (emails will be skipped):",
-        error.message
+      console.error("⚠️  Email service initialization failed:", error.message);
+      this.client = null;
+    }
+  }
+
+  // Internal send helper used by all email methods
+  async _send({ to, subject, html, attachments = [] }) {
+    if (!this.client) {
+      console.warn(
+        `⚠️  Email service not configured - skipping email to ${to}`,
       );
-      this.emailEnabled = false;
-      this.transporter = null;
+      return { skipped: true, reason: "Email service not configured" };
+    }
+    try {
+      const email = {
+        sender: { name: this.senderName, email: this.senderEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      };
+
+      if (attachments.length > 0) {
+        email.attachment = attachments.map((a) => ({
+          name: a.filename,
+          content: Buffer.isBuffer(a.content)
+            ? a.content.toString("base64")
+            : Buffer.from(a.content).toString("base64"),
+        }));
+      }
+
+      const result =
+        await this.client.transactionalEmails.sendTransacEmail(email);
+      console.log(
+        `✅ Email sent to ${to} — messageId: ${result?.messageId || "ok"}`,
+      );
+      return result;
+    } catch (error) {
+      const statusCode =
+        error?.statusCode ||
+        error?.rawResponse?.statusCode ||
+        error?.response?.status ||
+        null;
+      const reason =
+        error?.body?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Unknown email error";
+
+      if (statusCode) {
+        console.error(
+          `⚠️  Failed to send email to ${to} [${statusCode}]:`,
+          reason,
+        );
+      } else {
+        console.error(`⚠️  Failed to send email to ${to}:`, reason);
+      }
+
+      if (error?.body) {
+        console.error("Brevo error body:", error.body);
+      }
+
+      return { skipped: true, reason };
     }
   }
 
@@ -82,112 +112,53 @@ class EmailService {
       const templatePath = path.join(
         __dirname,
         "../templates/email",
-        `${templateName}.hbs`
+        `${templateName}.hbs`,
       );
       const templateSource = await fs.readFile(templatePath, "utf8");
       return handlebars.compile(templateSource);
     } catch (error) {
       console.error(
         `⚠️  Failed to load email template ${templateName} (email skipped):`,
-        error.message
+        error.message,
       );
       return null;
     }
   }
 
   async sendOTP(email, otp, purpose = "verification") {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - OTP email skipped for ${email}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("otp");
-      if (!template) {
-        console.warn(`⚠️  Template not found - OTP email skipped for ${email}`);
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      const expiryTime = new Date(
-        Date.now() + 60 * 60 * 1000
-      ).toLocaleTimeString("en-US", {
+    const template = await this.loadTemplate("otp");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const expiryTime = new Date(Date.now() + 60 * 60 * 1000).toLocaleTimeString(
+      "en-US",
+      {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
-      });
-      const html = template({
-        otp,
-        purpose,
-        expiryMinutes: 60, // Always 1 hour expiry
-        expiryTime: expiryTime,
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: email,
-        subject: `Your OTP for ${purpose}`,
-        html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ OTP email sent:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error("⚠️  Failed to send OTP email (skipped):", error.message);
-      return { skipped: true, reason: error.message };
-    }
+      },
+    );
+    const html = template({ otp, purpose, expiryMinutes: 60, expiryTime });
+    return this._send({ to: email, subject: `Your OTP for ${purpose}`, html });
   }
 
   async sendSessionNotification(
     teacherEmail,
     teacherName,
     courseTitle,
-    sessionCode
+    sessionCode,
   ) {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - Session notification skipped for ${teacherEmail}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("session-notification");
-      if (!template) {
-        console.warn(
-          `⚠️  Template not found - Session notification skipped for ${teacherEmail}`
-        );
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      const html = template({
-        teacherName,
-        courseTitle,
-        sessionCode,
-        timestamp: new Date().toLocaleString(),
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: teacherEmail,
-        subject: `Attendance Session Started - ${courseTitle}`,
-        html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ Session notification sent:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error(
-        "⚠️  Failed to send session notification (skipped):",
-        error.message
-      );
-      return { skipped: true, reason: error.message };
-    }
+    const template = await this.loadTemplate("session-notification");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const html = template({
+      teacherName,
+      courseTitle,
+      sessionCode,
+      timestamp: new Date().toLocaleString(),
+    });
+    return this._send({
+      to: teacherEmail,
+      subject: `Attendance Session Started - ${courseTitle}`,
+      html,
+    });
   }
 
   async sendAttendanceReport(
@@ -195,57 +166,28 @@ class EmailService {
     teacherName,
     courseName,
     reportBuffer,
-    format = "csv"
+    format = "csv",
   ) {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - Attendance report email skipped for ${teacherEmail}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("attendance-report");
-      if (!template) {
-        console.warn(
-          `⚠️  Template not found - Attendance report email skipped for ${teacherEmail}`
-        );
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      const html = template({
-        teacherName,
-        courseName,
-        courseTitle: courseName, // For backward compatibility
-        format: format.toUpperCase(),
-        timestamp: new Date().toLocaleString(),
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: teacherEmail,
-        subject: `Attendance Report - ${courseName}`,
-        html,
-        attachments: [
-          {
-            filename: `attendance-report-${Date.now()}.${format}`,
-            content: reportBuffer,
-            contentType: format === "csv" ? "text/csv" : "application/pdf",
-          },
-        ],
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ Attendance report sent:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error(
-        "⚠️  Failed to send attendance report (skipped):",
-        error.message
-      );
-      return { skipped: true, reason: error.message };
-    }
+    const template = await this.loadTemplate("attendance-report");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const html = template({
+      teacherName,
+      courseName,
+      courseTitle: courseName,
+      format: format.toUpperCase(),
+      timestamp: new Date().toLocaleString(),
+    });
+    return this._send({
+      to: teacherEmail,
+      subject: `Attendance Report - ${courseName}`,
+      html,
+      attachments: [
+        {
+          filename: `attendance-report-${Date.now()}.${format}`,
+          content: reportBuffer,
+        },
+      ],
+    });
   }
 
   async sendPasswordResetOTP(email, otp) {
@@ -253,47 +195,19 @@ class EmailService {
   }
 
   async sendWelcomeEmail(teacherEmail, teacherName, temporaryPassword) {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - Welcome email skipped for ${teacherEmail}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("welcome");
-      if (!template) {
-        console.warn(
-          `⚠️  Template not found - Welcome email skipped for ${teacherEmail}`
-        );
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      const html = template({
-        teacherName,
-        teacherEmail,
-        temporaryPassword,
-        loginUrl: process.env.FRONTEND_URL || "http://localhost:3000",
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: teacherEmail,
-        subject: "Welcome to UniTrack Attendance System",
-        html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ Welcome email sent:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error(
-        "⚠️  Failed to send welcome email (skipped):",
-        error.message
-      );
-      return { skipped: true, reason: error.message };
-    }
+    const template = await this.loadTemplate("welcome");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const html = template({
+      teacherName,
+      teacherEmail,
+      temporaryPassword,
+      loginUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+    });
+    return this._send({
+      to: teacherEmail,
+      subject: "Welcome to UniTrack Attendance System",
+      html,
+    });
   }
 
   async sendStudentShareRequest(
@@ -304,56 +218,26 @@ class EmailService {
     targetCourse,
     studentCount,
     message,
-    requestId
+    requestId,
   ) {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - Student share request email skipped for ${targetTeacherEmail}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("student-share-request");
-      if (!template) {
-        console.warn(
-          `⚠️  Template not found - Student share request email skipped for ${targetTeacherEmail}`
-        );
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      const html = template({
-        targetTeacherName,
-        requesterName,
-        requesterCourse,
-        targetCourse,
-        studentCount,
-        message,
-        requestId,
-        approveUrl: `${
-          process.env.FRONTEND_URL || "http://localhost:3000"
-        }/share-requests/${requestId}`,
-        timestamp: new Date().toLocaleString(),
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: targetTeacherEmail,
-        subject: `Student Sharing Request from ${requesterName}`,
-        html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ Student share request email sent:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error(
-        "⚠️  Failed to send student share request email (skipped):",
-        error.message
-      );
-      return { skipped: true, reason: error.message };
-    }
+    const template = await this.loadTemplate("student-share-request");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const html = template({
+      targetTeacherName,
+      requesterName,
+      requesterCourse,
+      targetCourse,
+      studentCount,
+      message,
+      requestId,
+      approveUrl: `${process.env.FRONTEND_URL || "http://localhost:3000"}/share-requests/${requestId}`,
+      timestamp: new Date().toLocaleString(),
+    });
+    return this._send({
+      to: targetTeacherEmail,
+      subject: `Student Sharing Request from ${requesterName}`,
+      html,
+    });
   }
 
   async sendStudentShareResponse(
@@ -364,197 +248,101 @@ class EmailService {
     sourceCourse,
     approved,
     studentCount,
-    responseMessage
+    responseMessage,
   ) {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - Student share response email skipped for ${requesterEmail}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("student-share-response");
-      if (!template) {
-        console.warn(
-          `⚠️  Template not found - Student share response email skipped for ${requesterEmail}`
-        );
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      const html = template({
-        requesterName,
-        responderName,
-        requesterCourse,
-        sourceCourse,
-        approved,
-        studentCount,
-        responseMessage,
-        timestamp: new Date().toLocaleString(),
-      });
-
-      const subject = approved
-        ? `Student Sharing Request Approved by ${responderName}`
-        : `Student Sharing Request Declined by ${responderName}`;
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: requesterEmail,
-        subject,
-        html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ Student share response email sent:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error(
-        "⚠️  Failed to send student share response email (skipped):",
-        error.message
-      );
-      return { skipped: true, reason: error.message };
-    }
+    const template = await this.loadTemplate("student-share-response");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const html = template({
+      requesterName,
+      responderName,
+      requesterCourse,
+      sourceCourse,
+      approved,
+      studentCount,
+      responseMessage,
+      timestamp: new Date().toLocaleString(),
+    });
+    const subject = approved
+      ? `Student Sharing Request Approved by ${responderName}`
+      : `Student Sharing Request Declined by ${responderName}`;
+    return this._send({ to: requesterEmail, subject, html });
   }
 
   async sendSupportRequestToAdmin(adminEmail, supportData) {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - Support request email skipped for ${adminEmail}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("support-request");
-      if (!template) {
-        console.warn(
-          `⚠️  Template not found - Support request email skipped for ${adminEmail}`
-        );
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      // Determine priority color
-      const priorityColors = {
-        low: "#28a745",
-        medium: "#ffc107",
-        high: "#fd7e14",
-        urgent: "#dc3545",
-      };
-
-      const html = template({
-        userName: supportData.name,
-        userEmail: supportData.email,
-        userType: supportData.user_type,
-        subject: supportData.subject,
-        category: supportData.category,
-        priority: supportData.priority.toLowerCase(),
-        priorityColor: priorityColors[supportData.priority] || "#6c757d",
-        message: supportData.message,
-        submittedAt: new Date(supportData.submittedAt).toLocaleString(),
-        ticketId: supportData.ticketId,
-        phone: supportData.phone,
-        matricNo: supportData.matric_no,
-        courseInfo: supportData.course_info
-          ? JSON.stringify(supportData.course_info, null, 2)
-          : null,
-        errorDetails: supportData.error_details
-          ? JSON.stringify(supportData.error_details, null, 2)
-          : null,
-        browserInfo: supportData.browser_info
-          ? JSON.stringify(supportData.browser_info, null, 2)
-          : null,
-        ip_address: supportData.ip_address,
-        user_agent: supportData.user_agent,
-        systemName: "UniTrack System",
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: adminEmail,
-        subject: `[Support Request] ${supportData.priority.toUpperCase()} - ${
-          supportData.subject
-        }`,
-        html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ Support request email sent to admin:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error(
-        "⚠️  Failed to send support request email to admin (skipped):",
-        error.message
-      );
-      return { skipped: true, reason: error.message };
-    }
+    const template = await this.loadTemplate("support-request");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const priorityColors = {
+      low: "#28a745",
+      medium: "#ffc107",
+      high: "#fd7e14",
+      urgent: "#dc3545",
+    };
+    const html = template({
+      userName: supportData.name,
+      userEmail: supportData.email,
+      userType: supportData.user_type,
+      subject: supportData.subject,
+      category: supportData.category,
+      priority: supportData.priority.toLowerCase(),
+      priorityColor: priorityColors[supportData.priority] || "#6c757d",
+      message: supportData.message,
+      submittedAt: new Date(supportData.submittedAt).toLocaleString(),
+      ticketId: supportData.ticketId,
+      phone: supportData.phone,
+      matricNo: supportData.matric_no,
+      courseInfo: supportData.course_info
+        ? JSON.stringify(supportData.course_info, null, 2)
+        : null,
+      errorDetails: supportData.error_details
+        ? JSON.stringify(supportData.error_details, null, 2)
+        : null,
+      browserInfo: supportData.browser_info
+        ? JSON.stringify(supportData.browser_info, null, 2)
+        : null,
+      ip_address: supportData.ip_address,
+      user_agent: supportData.user_agent,
+      systemName: "UniTrack System",
+    });
+    return this._send({
+      to: adminEmail,
+      subject: `[Support Request] ${supportData.priority.toUpperCase()} - ${supportData.subject}`,
+      html,
+    });
   }
 
   async sendSupportConfirmation(userEmail, supportData) {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - Support confirmation email skipped for ${userEmail}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("support-confirmation");
-      if (!template) {
-        console.warn(
-          `⚠️  Template not found - Support confirmation email skipped for ${userEmail}`
-        );
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      // Determine priority color and expected response time
-      const priorityColors = {
-        low: "#28a745",
-        medium: "#ffc107",
-        high: "#fd7e14",
-        urgent: "#dc3545",
-      };
-
-      const expectedResponses = {
-        low: "within 2-3 business days",
-        medium: "within 1-2 business days",
-        high: "within 24 hours",
-        urgent: "within 4-6 hours",
-      };
-
-      const html = template({
-        userName: supportData.name,
-        subject: supportData.subject,
-        category: supportData.category,
-        priority: supportData.priority.toUpperCase(),
-        priorityColor: priorityColors[supportData.priority] || "#6c757d",
-        message: supportData.message,
-        submittedAt: new Date(supportData.submittedAt).toLocaleString(),
-        ticketId: supportData.ticketId,
-        expectedResponse:
-          expectedResponses[supportData.priority] || "as soon as possible",
-        systemName: "UniTrack System",
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: userEmail,
-        subject: `Support Request Confirmation - Ticket #${supportData.ticketId}`,
-        html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ Support confirmation email sent:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error(
-        "⚠️  Failed to send support confirmation email (skipped):",
-        error.message
-      );
-      return { skipped: true, reason: error.message };
-    }
+    const template = await this.loadTemplate("support-confirmation");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const priorityColors = {
+      low: "#28a745",
+      medium: "#ffc107",
+      high: "#fd7e14",
+      urgent: "#dc3545",
+    };
+    const expectedResponses = {
+      low: "within 2-3 business days",
+      medium: "within 1-2 business days",
+      high: "within 24 hours",
+      urgent: "within 4-6 hours",
+    };
+    const html = template({
+      userName: supportData.name,
+      subject: supportData.subject,
+      category: supportData.category,
+      priority: supportData.priority.toUpperCase(),
+      priorityColor: priorityColors[supportData.priority] || "#6c757d",
+      message: supportData.message,
+      submittedAt: new Date(supportData.submittedAt).toLocaleString(),
+      ticketId: supportData.ticketId,
+      expectedResponse:
+        expectedResponses[supportData.priority] || "as soon as possible",
+      systemName: "UniTrack System",
+    });
+    return this._send({
+      to: userEmail,
+      subject: `Support Request Confirmation - Ticket #${supportData.ticketId}`,
+      html,
+    });
   }
 
   async sendCourseAssignmentNotification({
@@ -570,67 +358,39 @@ class EmailService {
     reason = null,
     login_url = process.env.FRONTEND_URL || "http://localhost:3000",
   }) {
-    try {
-      // Check if email service is enabled
-      if (!this.emailEnabled || !this.transporter) {
-        console.warn(
-          `⚠️  Email service disabled - Course assignment notification skipped for ${lecturer_email}`
-        );
-        return { skipped: true, reason: "Email service not available" };
-      }
-
-      const template = await this.loadTemplate("course-assignment");
-      if (!template) {
-        console.warn(
-          `⚠️  Template not found - Course assignment notification skipped for ${lecturer_email}`
-        );
-        return { skipped: true, reason: "Template not found" };
-      }
-
-      const html = template({
-        lecturer_name,
-        course_title,
-        course_code,
-        level,
-        assignment_date: new Date(assignment_date).toLocaleDateString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        }),
-        assigned_by,
-        is_reassignment,
-        previous_lecturer,
-        reason,
-        login_url,
-        assignment_timestamp: new Date().toLocaleString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZoneName: "short",
-        }),
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: lecturer_email,
-        subject: `Course Assignment: ${course_code} - ${course_title}`,
-        html: html,
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log("✅ Course assignment notification sent:", info.messageId);
-      return info;
-    } catch (error) {
-      console.error(
-        "⚠️  Failed to send course assignment notification (skipped):",
-        error.message
-      );
-      return { skipped: true, reason: error.message };
-    }
+    const template = await this.loadTemplate("course-assignment");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const html = template({
+      lecturer_name,
+      course_title,
+      course_code,
+      level,
+      assignment_date: new Date(assignment_date).toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      assigned_by,
+      is_reassignment,
+      previous_lecturer,
+      reason,
+      login_url,
+      assignment_timestamp: new Date().toLocaleString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZoneName: "short",
+      }),
+    });
+    return this._send({
+      to: lecturer_email,
+      subject: `Course Assignment: ${course_code} - ${course_title}`,
+      html,
+    });
   }
 }
 
