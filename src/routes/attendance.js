@@ -11,15 +11,13 @@ const validate = require("../middleware/validation");
 const { attendanceLimiter } = require("../middleware/rateLimiter");
 const auditLogger = require("../middleware/auditLogger");
 const ReportGenerator = require("../utils/reportGenerator");
-const EmailService = require("../services/emailService");
+const emailService = require("../services/emailServiceInstance");
 const {
   generateDeviceFingerprint,
   generateReceiptSignature,
   isWithinRadius,
   isValidMatricNo,
 } = require("../utils/helpers");
-
-const emailService = new EmailService();
 
 const router = express.Router();
 

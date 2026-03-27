@@ -144,7 +144,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"teacher\"\n}"
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@test.com\",\n  \"password\": \"password123\",\n  \"staff_id\": \"STAFF/CSC/001\",\n  \"role\": \"teacher\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/register_teacher",
@@ -410,7 +410,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"louisdiaz43@gmail.com\",\n  \"password\": \"balikiss12\"\n}"
+              "raw": "{\n  \"email\": \"oluwoleoluwole82@gmail.com\",\n  \"password\": \"Queuecue@17\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",

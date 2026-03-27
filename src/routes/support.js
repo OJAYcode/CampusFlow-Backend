@@ -1,11 +1,10 @@
 const express = require("express");
 const { body, validationResult } = require("express-validator");
 const Admin = require("../models/Admin");
-const EmailService = require("../services/emailService");
+const emailService = require("../services/emailServiceInstance");
 const { supportLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
-const emailService = new EmailService();
 
 // Support categories and their descriptions
 const SUPPORT_CATEGORIES = {

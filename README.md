@@ -105,7 +105,8 @@ A comprehensive backend system for managing classroom attendance with geolocatio
 
 ### Authentication
 
-- `POST /api/auth/register_teacher` - Register new teacher
+- `POST /api/auth/check-staff-id` - Validate lecturer staff ID before signup
+- `POST /api/auth/register_teacher` - Register new teacher (requires `staff_id`)
 - `POST /api/auth/verify_registration` - Complete registration with OTP
 - `POST /api/auth/login` - Teacher login
 - `POST /api/auth/request_otp` - Request OTP for password reset
@@ -144,8 +145,13 @@ A comprehensive backend system for managing classroom attendance with geolocatio
 ### Admin (Admin Role Required)
 
 - `GET /api/admin/stats` - System statistics
+- `GET /api/admin/staff-directory` - List/search approved lecturer staff IDs
+- `POST /api/admin/staff-directory` - Add approved lecturer staff ID
+- `POST /api/admin/staff-directory/bulk` - Bulk add approved staff IDs
+- `PATCH /api/admin/staff-directory/:entryId` - Update staff directory record
+- `DELETE /api/admin/staff-directory/:entryId` - Delete staff directory record
 - `GET /api/admin/teachers` - Get all teachers
-- `POST /api/admin/teachers` - Create teacher account
+- `POST /api/admin/teachers` - Create teacher account (requires `staff_id`)
 - `PATCH /api/admin/teachers/:id` - Update teacher
 - `DELETE /api/admin/teachers/:id` - Delete teacher
 - `GET /api/admin/audit-logs` - System audit logs
@@ -158,6 +164,7 @@ A comprehensive backend system for managing classroom attendance with geolocatio
 - `id` (ObjectId) - Primary key
 - `name` (String) - Teacher's full name
 - `email` (String, unique) - Email address
+- `staff_id` (String, unique) - Lecturer staff ID (validated against staff directory)
 - `password_hash` (String) - Hashed password
 - `role` (String) - 'teacher' or 'admin'
 - `created_at` (Date) - Registration date
@@ -347,10 +354,15 @@ CMD ["npm", "start"]
 Use tools like Postman or curl to test the API:
 
 ```bash
+# Seed approved lecturer staff IDs (required before lecturer signup)
+npm run seed:approved-staff
+# Optional: use your own JSON file and replace existing directory records
+node scripts/seed-approved-staff.js --file ./scripts/approved-staff.seed.sample.json --replace
+
 # Register a teacher
 curl -X POST http://localhost:5000/api/auth/register_teacher \
   -H "Content-Type: application/json" \
-  -d '{"name":"John Doe","email":"john@example.com","password":"password123"}'
+  -d '{"name":"John Doe","email":"john@example.com","password":"password123","staff_id":"STAFF/CSC/001"}'
 
 # Login
 curl -X POST http://localhost:5000/api/auth/login \

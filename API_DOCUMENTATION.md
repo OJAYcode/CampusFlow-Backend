@@ -42,6 +42,46 @@ All endpoints return errors in this format:
 
 ## Authentication Endpoints
 
+### Check Staff ID (Before Signup)
+
+```http
+POST /auth/check-staff-id
+```
+
+**Request Body:**
+
+```json
+{
+  "staff_id": "STAFF/CSC/001",
+  "email": "john@example.com"
+}
+```
+
+**Response (Valid):**
+
+```json
+{
+  "valid": true,
+  "available": true,
+  "message": "Staff ID is valid and available for signup.",
+  "staff": {
+    "staff_id": "STAFF/CSC/001",
+    "name": "Dr. Jane Smith",
+    "department": "Computer Science"
+  }
+}
+```
+
+**Response (Invalid):**
+
+```json
+{
+  "valid": false,
+  "available": false,
+  "message": "Staff ID is not on the approved lecturer list. Please contact your administrator."
+}
+```
+
 ### Register Teacher
 
 ```http
@@ -55,6 +95,7 @@ POST /auth/register_teacher
   "name": "John Doe",
   "email": "john@example.com",
   "password": "password123",
+  "staff_id": "STAFF/CSC/001",
   "role": "teacher"
 }
 ```
@@ -93,6 +134,7 @@ POST /auth/verify_registration
     "_id": "teacher-id",
     "name": "John Doe",
     "email": "john@example.com",
+    "staff_id": "STAFF/CSC/001",
     "role": "teacher"
   }
 }
@@ -607,6 +649,7 @@ Authorization: Bearer <admin-token>
 {
   "name": "New Teacher",
   "email": "teacher@example.com",
+  "staff_id": "STAFF/CSC/001",
   "role": "teacher",
   "sendWelcomeEmail": true
 }
@@ -621,10 +664,50 @@ Authorization: Bearer <admin-token>
     "_id": "teacher-id",
     "name": "New Teacher",
     "email": "teacher@example.com",
+    "staff_id": "STAFF/CSC/001",
     "role": "teacher"
   },
   "temporary_password": "generated-password"
 }
+```
+
+### Staff Directory (Approved Lecturer List)
+
+Use these endpoints to manage the approved lecturer list used for staff ID verification during signup.
+
+```http
+GET /admin/staff-directory?search=CSC&is_active=true&page=1&limit=20
+Authorization: Bearer <admin-token>
+```
+
+```http
+POST /admin/staff-directory
+Authorization: Bearer <admin-token>
+```
+
+```json
+{
+  "staff_id": "STAFF/CSC/001",
+  "name": "Dr. Jane Smith",
+  "email": "jane.smith@university.edu",
+  "department": "Computer Science",
+  "is_active": true
+}
+```
+
+```http
+POST /admin/staff-directory/bulk
+Authorization: Bearer <admin-token>
+```
+
+```http
+PATCH /admin/staff-directory/:entryId
+Authorization: Bearer <admin-token>
+```
+
+```http
+DELETE /admin/staff-directory/:entryId
+Authorization: Bearer <admin-token>
 ```
 
 ---

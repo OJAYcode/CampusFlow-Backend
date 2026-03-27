@@ -37,6 +37,7 @@ require("./models/AuditLog");
 require("./models/EmailOtp");
 require("./models/StudentShareRequest");
 require("./models/FAQ");
+require("./models/ApprovedStaff");
 
 const app = express();
 

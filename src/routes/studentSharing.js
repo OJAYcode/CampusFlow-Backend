@@ -9,9 +9,8 @@ const CourseStudent = require("../models/CourseStudent");
 const { auth } = require("../middleware/auth");
 const validate = require("../middleware/validation");
 const auditLogger = require("../middleware/auditLogger");
-const EmailService = require("../services/emailService");
+const emailService = require("../services/emailServiceInstance");
 
-const emailService = new EmailService();
 const router = express.Router();
 
 // Get all teachers for sharing (excluding self)

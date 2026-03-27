@@ -95,7 +95,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"teacher\"\n}"
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@test.com\",\n  \"password\": \"password123\",\n  \"staff_id\": \"STAFF/CSC/001\",\n  \"role\": \"teacher\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/register_teacher",

@@ -15,6 +15,14 @@ const teacherSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    staff_id: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
     password_hash: {
       type: String,
       required: true,

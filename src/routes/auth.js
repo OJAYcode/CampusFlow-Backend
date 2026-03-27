@@ -3,9 +3,10 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const { body } = require("express-validator");
 const Teacher = require("../models/Teacher");
+const ApprovedStaff = require("../models/ApprovedStaff");
 const Admin = require("../models/Admin");
 const EmailOtp = require("../models/EmailOtp");
-const EmailService = require("../services/emailService");
+const emailService = require("../services/emailServiceInstance");
 const {
   generateOTP,
   generateRandomPassword,
@@ -16,9 +17,89 @@ const { strictLimiter, otpLimiter } = require("../middleware/rateLimiter");
 const auditLogger = require("../middleware/auditLogger");
 const { auth } = require("../middleware/auth");
 
-const emailService = new EmailService();
-
 const router = express.Router();
+
+// Check if staff ID is valid and available for signup
+router.post(
+  "/check-staff-id",
+  strictLimiter,
+  [
+    body("staff_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Staff ID is required")
+      .isLength({ min: 2, max: 40 })
+      .withMessage("Staff ID must be 2-40 characters")
+      .matches(/^[a-zA-Z0-9/_-]+$/)
+      .withMessage(
+        "Staff ID can only contain letters, numbers, slash, underscore, and dash"
+      ),
+    body("email")
+      .optional()
+      .isEmail()
+      .normalizeEmail({ gmail_remove_dots: false })
+      .withMessage("Valid email required"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { staff_id, email } = req.body;
+      const normalizedStaffId = staff_id.trim().toUpperCase();
+
+      const approvedStaff = await ApprovedStaff.findOne({
+        staff_id: normalizedStaffId,
+        is_active: true,
+      }).select("staff_id name department email");
+
+      if (!approvedStaff) {
+        return res.json({
+          valid: false,
+          available: false,
+          message:
+            "Staff ID is not on the approved lecturer list. Please contact your administrator.",
+        });
+      }
+
+      const existingTeacher = await Teacher.findOne({
+        staff_id: normalizedStaffId,
+      }).select("_id");
+      if (existingTeacher) {
+        return res.json({
+          valid: false,
+          available: false,
+          message: "Staff ID is already linked to an existing account.",
+        });
+      }
+
+      if (
+        email &&
+        approvedStaff.email &&
+        approvedStaff.email.toLowerCase() !== email.toLowerCase()
+      ) {
+        return res.json({
+          valid: false,
+          available: false,
+          message:
+            "The provided email does not match the approved email for this staff ID.",
+        });
+      }
+
+      return res.json({
+        valid: true,
+        available: true,
+        message: "Staff ID is valid and available for signup.",
+        staff: {
+          staff_id: approvedStaff.staff_id,
+          name: approvedStaff.name,
+          department: approvedStaff.department,
+        },
+      });
+    } catch (error) {
+      console.error("Check staff ID error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
 
 // Register teacher
 router.post(
@@ -36,6 +117,16 @@ router.post(
     body("password")
       .isLength({ min: 8 })
       .withMessage("Password must be at least 8 characters"),
+    body("staff_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Staff ID is required")
+      .isLength({ min: 2, max: 40 })
+      .withMessage("Staff ID must be 2-40 characters")
+      .matches(/^[a-zA-Z0-9/_-]+$/)
+      .withMessage(
+        "Staff ID can only contain letters, numbers, slash, underscore, and dash"
+      ),
     body("role")
       .optional()
       .isIn(["teacher", "admin"])
@@ -45,7 +136,8 @@ router.post(
   auditLogger("teacher_registration"),
   async (req, res) => {
     try {
-      const { name, email, password, role = "teacher" } = req.body;
+      const { name, email, password, role = "teacher", staff_id } = req.body;
+      const normalizedStaffId = staff_id.trim().toUpperCase();
 
       // Check if teacher already exists
       const existingTeacher = await Teacher.findOne({ email });
@@ -53,6 +145,42 @@ router.post(
         return res
           .status(400)
           .json({ error: "Teacher with this email already exists" });
+      }
+
+      // Prevent duplicate account registration with the same staff ID
+      const existingStaffId = await Teacher.findOne({
+        staff_id: normalizedStaffId,
+      });
+      if (existingStaffId) {
+        return res.status(400).json({
+          error: "Staff ID already linked to an account",
+        });
+      }
+
+      // Validate staff ID against approved lecturer list
+      const approvedStaff = await ApprovedStaff.findOne({
+        staff_id: normalizedStaffId,
+        is_active: true,
+      });
+
+      if (!approvedStaff) {
+        return res.status(400).json({
+          error: "Invalid staff ID",
+          message:
+            "This staff ID is not on the approved lecturer list. Please contact your administrator.",
+        });
+      }
+
+      // If a staff-list email is set, enforce match for stronger identity checks
+      if (
+        approvedStaff.email &&
+        approvedStaff.email.toLowerCase() !== email.toLowerCase()
+      ) {
+        return res.status(400).json({
+          error: "Staff ID/email mismatch",
+          message:
+            "The provided email does not match the approved email for this staff ID.",
+        });
       }
 
       // Generate OTP for email verification
@@ -65,6 +193,7 @@ router.post(
       const tempTeacher = new Teacher({
         name,
         email,
+        staff_id: normalizedStaffId,
         password_hash: password, // Will be hashed by pre-save middleware
         role,
         email_verified: false,

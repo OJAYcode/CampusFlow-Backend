@@ -39,12 +39,14 @@ const seedDatabase = async () => {
 
     console.log("👑 Creating Administrator Account...");
     // Create admin user
-    const adminExists = await Admin.findOne({ email: "louisdiaz43@gmail.com" });
+    const adminExists = await Admin.findOne({
+      email: "oluwoleoluwole82@gmail.com",
+    });
     if (!adminExists) {
       const admin = new Admin({
         name: "Biodun Administrator",
-        email: "louisdiaz43@gmail.com",
-        password_hash: "balikiss12", // Will be hashed by the pre-save middleware
+        email: "oluwoleoluwole82@gmail.com",
+        password_hash: "Queuecue@17", // Will be hashed by the pre-save middleware
         role: "admin",
       });
       await admin.save();
@@ -55,7 +57,7 @@ const seedDatabase = async () => {
         await emailService.sendWelcomeEmail(
           admin.email,
           admin.name,
-          "balikiss12", // temporary password
+          "Queuecue@17", // temporary password
           "http://localhost:3000/login" // login URL
         );
         console.log("🎉 ✅ ADMIN ACCOUNT CREATED SUCCESSFULLY!");
@@ -64,7 +66,7 @@ const seedDatabase = async () => {
         console.log("│                 ADMIN CREDENTIALS                   │");
         console.log("├─────────────────────────────────────────────────────┤");
         console.log(`│ 📧 Email:    ${admin.email.padEnd(30)} │`);
-        console.log(`│ 🔑 Password: ${"balikiss12".padEnd(30)} │`);
+        console.log(`│ 🔑 Password: ${"Queuecue@17".padEnd(30)} │`);
         console.log(`│ 👑 Role:     ${"Administrator".padEnd(30)} │`);
         console.log("└─────────────────────────────────────────────────────┘");
       } catch (emailError) {
@@ -74,7 +76,7 @@ const seedDatabase = async () => {
         console.log("│                 ADMIN CREDENTIALS                   │");
         console.log("├─────────────────────────────────────────────────────┤");
         console.log(`│ 📧 Email:    ${admin.email.padEnd(30)} │`);
-        console.log(`│ 🔑 Password: ${"balikiss12".padEnd(30)} │`);
+        console.log(`│ 🔑 Password: ${"Queuecue@17".padEnd(30)} │`);
         console.log(`│ 👑 Role:     ${"Administrator".padEnd(30)} │`);
         console.log("└─────────────────────────────────────────────────────┘");
       }
@@ -250,7 +252,7 @@ const seedDatabase = async () => {
     console.log("SMTP User:", process.env.EMAIL_USER);
     console.log("Email From:", process.env.EMAIL_FROM);
     console.log("\n🔐 Sample Accounts:");
-    console.log("Admin: louisdiaz43@gmail.com / balikiss12");
+    console.log("Admin: oluwoleoluwole82@gmail.com / Queuecue@17");
     console.log("Teacher: muhammedabiodun42@gmail.com / balikiss12");
     console.log("\n🚀 Next Steps:");
     console.log("1. Check your email inbox for welcome messages");
@@ -270,3 +272,4 @@ if (require.main === module) {
 }
 
 module.exports = seedDatabase;
+

@@ -20,10 +20,21 @@ class EmailService {
         this.emailEnabled = false;
         this.transporter = null;
       } else {
+        const smtpPort = parseInt(process.env.EMAIL_PORT, 10) || 587;
+        const smtpSecure =
+          process.env.EMAIL_SECURE === "true" ||
+          (process.env.EMAIL_SECURE !== "false" && smtpPort === 465);
+        const connectionTimeout =
+          parseInt(process.env.EMAIL_CONNECTION_TIMEOUT_MS, 10) || 15000;
+
         this.transporter = nodemailer.createTransport({
           host: process.env.EMAIL_HOST,
-          port: process.env.EMAIL_PORT,
-          secure: false, // true for 465, false for other ports
+          port: smtpPort,
+          secure: smtpSecure,
+          connectionTimeout,
+          greetingTimeout: connectionTimeout,
+          socketTimeout:
+            parseInt(process.env.EMAIL_SOCKET_TIMEOUT_MS, 10) || 30000,
           auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,

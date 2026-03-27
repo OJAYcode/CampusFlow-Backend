@@ -6,10 +6,9 @@ const Attendance = require("../models/Attendance");
 const { auth } = require("../middleware/auth");
 const validate = require("../middleware/validation");
 const auditLogger = require("../middleware/auditLogger");
-const EmailService = require("../services/emailService");
+const emailService = require("../services/emailServiceInstance");
 const { generateSessionCode, generateNonce } = require("../utils/helpers");
 
-const emailService = new EmailService();
 const router = express.Router();
 
 // Start new attendance session

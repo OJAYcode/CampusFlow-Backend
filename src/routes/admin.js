@@ -8,6 +8,7 @@ const Session = require("../models/Session");
 const Attendance = require("../models/Attendance");
 const AuditLog = require("../models/AuditLog");
 const Admin = require("../models/Admin");
+const ApprovedStaff = require("../models/ApprovedStaff");
 const EmailOtp = require("../models/EmailOtp");
 const DeviceFingerprint = require("../models/DeviceFingerprint");
 const StudentShareRequest = require("../models/StudentShareRequest");
@@ -15,11 +16,20 @@ const FAQ = require("../models/FAQ");
 const { adminAuth } = require("../middleware/auth");
 const validate = require("../middleware/validation");
 const auditLogger = require("../middleware/auditLogger");
-const EmailService = require("../services/emailService");
+const emailService = require("../services/emailServiceInstance");
 const ReportGenerator = require("../utils/reportGenerator");
 
-const emailService = new EmailService();
 const router = express.Router();
+
+const normalizeStaffId = (value) => value?.toString().trim().toUpperCase();
+const parseBoolean = (value) => {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return undefined;
+};
+
+const getAdminActorId = (req) =>
+  req.admin?._id || req.user?._id || req.teacher?._id || null;
 
 // Helper function to generate comprehensive course attendance data
 async function generateCourseAttendanceData(courseId) {
@@ -672,6 +682,7 @@ router.get("/teachers", adminAuth, async (req, res) => {
         $or: [
           { name: { $regex: search, $options: "i" } },
           { email: { $regex: search, $options: "i" } },
+          { staff_id: { $regex: search, $options: "i" } },
         ],
       };
     }
@@ -731,6 +742,445 @@ router.get("/teachers", adminAuth, async (req, res) => {
   }
 });
 
+// Staff directory management (admin only)
+router.get(
+  "/staff-directory",
+  adminAuth,
+  [
+    query("page")
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage("Page must be a positive integer"),
+    query("limit")
+      .optional()
+      .isInt({ min: 1, max: 200 })
+      .withMessage("Limit must be between 1 and 200"),
+    query("is_active")
+      .optional()
+      .isIn(["true", "false", "all"])
+      .withMessage("is_active must be true, false, or all"),
+    query("search")
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 100 })
+      .withMessage("Search must be 1-100 characters"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 20;
+      const skip = (page - 1) * limit;
+      const isActiveFilter = req.query.is_active || "all";
+      const search = req.query.search?.trim();
+
+      const filter = {};
+      if (isActiveFilter === "true") {
+        filter.is_active = true;
+      } else if (isActiveFilter === "false") {
+        filter.is_active = false;
+      }
+
+      if (search) {
+        filter.$or = [
+          { staff_id: { $regex: search, $options: "i" } },
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { department: { $regex: search, $options: "i" } },
+        ];
+      }
+
+      const staffEntries = await ApprovedStaff.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      const total = await ApprovedStaff.countDocuments(filter);
+
+      const linkedStaffIds = staffEntries.map((entry) => entry.staff_id);
+      const linkedTeachers = await Teacher.find({
+        staff_id: { $in: linkedStaffIds },
+      })
+        .select("_id staff_id name email")
+        .lean();
+
+      const teacherByStaffId = new Map(
+        linkedTeachers.map((teacher) => [teacher.staff_id, teacher])
+      );
+
+      const records = staffEntries.map((entry) => {
+        const linkedTeacher = teacherByStaffId.get(entry.staff_id) || null;
+        return {
+          ...entry,
+          linked_teacher: linkedTeacher
+            ? {
+                _id: linkedTeacher._id,
+                name: linkedTeacher.name,
+                email: linkedTeacher.email,
+              }
+            : null,
+        };
+      });
+
+      res.json({
+        staff: records,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+          totalRecords: total,
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1,
+        },
+      });
+    } catch (error) {
+      console.error("Get staff directory error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+router.post(
+  "/staff-directory",
+  adminAuth,
+  [
+    body("staff_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Staff ID is required")
+      .isLength({ min: 2, max: 40 })
+      .withMessage("Staff ID must be 2-40 characters")
+      .matches(/^[a-zA-Z0-9/_-]+$/)
+      .withMessage(
+        "Staff ID can only contain letters, numbers, slash, underscore, and dash"
+      ),
+    body("name")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Name must be 2-100 characters"),
+    body("email")
+      .optional()
+      .isEmail()
+      .normalizeEmail({ gmail_remove_dots: false })
+      .withMessage("Valid email required"),
+    body("department")
+      .optional()
+      .trim()
+      .isLength({ max: 100 })
+      .withMessage("Department cannot exceed 100 characters"),
+    body("notes")
+      .optional()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage("Notes cannot exceed 500 characters"),
+    body("is_active")
+      .optional()
+      .isBoolean()
+      .withMessage("is_active must be true or false"),
+  ],
+  validate,
+  auditLogger("admin_added_staff_directory_record"),
+  async (req, res) => {
+    try {
+      const actorId = getAdminActorId(req);
+      const normalizedStaffId = normalizeStaffId(req.body.staff_id);
+      const parsedIsActive = parseBoolean(req.body.is_active);
+
+      const existingEntry = await ApprovedStaff.findOne({
+        staff_id: normalizedStaffId,
+      });
+      if (existingEntry) {
+        return res.status(409).json({
+          error: "Staff record already exists",
+          message: "A staff directory entry with this staff ID already exists",
+        });
+      }
+
+      const entry = new ApprovedStaff({
+        staff_id: normalizedStaffId,
+        name: req.body.name || null,
+        email: req.body.email || null,
+        department: req.body.department || null,
+        notes: req.body.notes || null,
+        is_active: parsedIsActive ?? true,
+        created_by: actorId,
+        updated_by: actorId,
+      });
+
+      await entry.save();
+
+      res.status(201).json({
+        message: "Staff directory entry added successfully",
+        staff: entry,
+      });
+    } catch (error) {
+      console.error("Create staff directory entry error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+router.post(
+  "/staff-directory/bulk",
+  adminAuth,
+  [
+    body("staff")
+      .isArray({ min: 1, max: 500 })
+      .withMessage("staff must be an array with 1 to 500 records"),
+    body("staff.*.staff_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Each record must include a staff ID")
+      .isLength({ min: 2, max: 40 })
+      .withMessage("Each staff ID must be 2-40 characters")
+      .matches(/^[a-zA-Z0-9/_-]+$/)
+      .withMessage(
+        "Staff ID can only contain letters, numbers, slash, underscore, and dash"
+      ),
+    body("staff.*.name")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Each name must be 2-100 characters"),
+    body("staff.*.email")
+      .optional()
+      .isEmail()
+      .normalizeEmail({ gmail_remove_dots: false })
+      .withMessage("Each email must be valid"),
+    body("staff.*.department")
+      .optional()
+      .trim()
+      .isLength({ max: 100 })
+      .withMessage("Each department cannot exceed 100 characters"),
+    body("staff.*.notes")
+      .optional()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage("Each notes value cannot exceed 500 characters"),
+    body("staff.*.is_active")
+      .optional()
+      .isBoolean()
+      .withMessage("Each is_active value must be true or false"),
+  ],
+  validate,
+  auditLogger("admin_bulk_added_staff_directory_records"),
+  async (req, res) => {
+    try {
+      const actorId = getAdminActorId(req);
+      const { staff } = req.body;
+      const results = {
+        created: [],
+        failed: [],
+        total_processed: staff.length,
+      };
+
+      const seenStaffIds = new Set();
+
+      for (const staffData of staff) {
+        const normalizedStaffId = normalizeStaffId(staffData.staff_id);
+        const parsedIsActive = parseBoolean(staffData.is_active);
+
+        if (seenStaffIds.has(normalizedStaffId)) {
+          results.failed.push({
+            staff_id: normalizedStaffId,
+            error: "Duplicate staff ID in request payload",
+          });
+          continue;
+        }
+        seenStaffIds.add(normalizedStaffId);
+
+        try {
+          const existingEntry = await ApprovedStaff.findOne({
+            staff_id: normalizedStaffId,
+          });
+          if (existingEntry) {
+            results.failed.push({
+              staff_id: normalizedStaffId,
+              error: "Staff record already exists",
+            });
+            continue;
+          }
+
+          const entry = new ApprovedStaff({
+            staff_id: normalizedStaffId,
+            name: staffData.name || null,
+            email: staffData.email || null,
+            department: staffData.department || null,
+            notes: staffData.notes || null,
+            is_active: parsedIsActive ?? true,
+            created_by: actorId,
+            updated_by: actorId,
+          });
+
+          await entry.save();
+          results.created.push(entry);
+        } catch (innerError) {
+          console.error(
+            `Error adding staff directory entry ${normalizedStaffId}:`,
+            innerError
+          );
+          results.failed.push({
+            staff_id: normalizedStaffId,
+            error: "Internal error during creation",
+          });
+        }
+      }
+
+      res.status(201).json({
+        message: `Bulk staff directory import completed. ${results.created.length} created, ${results.failed.length} failed.`,
+        results,
+      });
+    } catch (error) {
+      console.error("Bulk create staff directory entries error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+router.patch(
+  "/staff-directory/:entryId",
+  adminAuth,
+  [
+    param("entryId").isMongoId().withMessage("Valid staff entry ID required"),
+    body("staff_id")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 40 })
+      .withMessage("Staff ID must be 2-40 characters")
+      .matches(/^[a-zA-Z0-9/_-]+$/)
+      .withMessage(
+        "Staff ID can only contain letters, numbers, slash, underscore, and dash"
+      ),
+    body("name")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Name must be 2-100 characters"),
+    body("email")
+      .optional()
+      .isEmail()
+      .normalizeEmail({ gmail_remove_dots: false })
+      .withMessage("Valid email required"),
+    body("department")
+      .optional()
+      .trim()
+      .isLength({ max: 100 })
+      .withMessage("Department cannot exceed 100 characters"),
+    body("notes")
+      .optional()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage("Notes cannot exceed 500 characters"),
+    body("is_active")
+      .optional()
+      .isBoolean()
+      .withMessage("is_active must be true or false"),
+  ],
+  validate,
+  auditLogger("admin_updated_staff_directory_record"),
+  async (req, res) => {
+    try {
+      const { entryId } = req.params;
+      const actorId = getAdminActorId(req);
+      const parsedIsActive = parseBoolean(req.body.is_active);
+      const entry = await ApprovedStaff.findById(entryId);
+
+      if (!entry) {
+        return res.status(404).json({ error: "Staff directory record not found" });
+      }
+
+      if (req.body.staff_id) {
+        const nextStaffId = normalizeStaffId(req.body.staff_id);
+        if (entry.staff_id !== nextStaffId) {
+          const alreadyExists = await ApprovedStaff.findOne({
+            staff_id: nextStaffId,
+            _id: { $ne: entryId },
+          });
+          if (alreadyExists) {
+            return res.status(409).json({
+              error: "Staff ID already exists",
+            });
+          }
+
+          const linkedTeacher = await Teacher.findOne({
+            staff_id: entry.staff_id,
+          }).select("_id");
+          if (linkedTeacher) {
+            return res.status(400).json({
+              error: "Cannot change staff ID",
+              message:
+                "This staff ID is already linked to a teacher account. Create a new staff record instead.",
+            });
+          }
+
+          entry.staff_id = nextStaffId;
+        }
+      }
+
+      if (req.body.name !== undefined) entry.name = req.body.name || null;
+      if (req.body.email !== undefined) entry.email = req.body.email || null;
+      if (req.body.department !== undefined) {
+        entry.department = req.body.department || null;
+      }
+      if (req.body.notes !== undefined) entry.notes = req.body.notes || null;
+      if (parsedIsActive !== undefined) {
+        entry.is_active = parsedIsActive;
+      }
+
+      entry.updated_by = actorId;
+      await entry.save();
+
+      res.json({
+        message: "Staff directory record updated successfully",
+        staff: entry,
+      });
+    } catch (error) {
+      console.error("Update staff directory entry error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+router.delete(
+  "/staff-directory/:entryId",
+  adminAuth,
+  [param("entryId").isMongoId().withMessage("Valid staff entry ID required")],
+  validate,
+  auditLogger("admin_deleted_staff_directory_record"),
+  async (req, res) => {
+    try {
+      const { entryId } = req.params;
+
+      const entry = await ApprovedStaff.findById(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: "Staff directory record not found" });
+      }
+
+      const linkedTeacher = await Teacher.findOne({
+        staff_id: entry.staff_id,
+      }).select("_id name email");
+      if (linkedTeacher) {
+        return res.status(400).json({
+          error: "Cannot delete linked staff record",
+          message:
+            "This staff ID is currently linked to an existing teacher account.",
+          linked_teacher: linkedTeacher,
+        });
+      }
+
+      await ApprovedStaff.findByIdAndDelete(entryId);
+
+      res.json({
+        message: "Staff directory record deleted successfully",
+      });
+    } catch (error) {
+      console.error("Delete staff directory entry error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
 // Create teacher account (admin only)
 router.post(
   "/teachers",
@@ -744,12 +1194,23 @@ router.post(
       .isEmail()
       .normalizeEmail({ gmail_remove_dots: false })
       .withMessage("Valid email required"),
+    body("staff_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Staff ID is required")
+      .isLength({ min: 2, max: 40 })
+      .withMessage("Staff ID must be 2-40 characters")
+      .matches(/^[a-zA-Z0-9/_-]+$/)
+      .withMessage(
+        "Staff ID can only contain letters, numbers, slash, underscore, and dash"
+      ),
   ],
   validate,
   auditLogger("admin_created_teacher"),
   async (req, res) => {
     try {
-      const { name, email } = req.body;
+      const { name, email, staff_id } = req.body;
+      const normalizedStaffId = normalizeStaffId(staff_id);
 
       // Check if teacher already exists
       const existingTeacher = await Teacher.findOne({ email });
@@ -759,6 +1220,38 @@ router.post(
           .json({ error: "Teacher with this email already exists" });
       }
 
+      const existingStaffId = await Teacher.findOne({
+        staff_id: normalizedStaffId,
+      });
+      if (existingStaffId) {
+        return res.status(400).json({
+          error: "Staff ID already linked to an account",
+        });
+      }
+
+      const approvedStaff = await ApprovedStaff.findOne({
+        staff_id: normalizedStaffId,
+        is_active: true,
+      });
+      if (!approvedStaff) {
+        return res.status(400).json({
+          error: "Invalid staff ID",
+          message:
+            "This staff ID is not on the approved lecturer list. Add it to the staff directory first.",
+        });
+      }
+
+      if (
+        approvedStaff.email &&
+        approvedStaff.email.toLowerCase() !== email.toLowerCase()
+      ) {
+        return res.status(400).json({
+          error: "Staff ID/email mismatch",
+          message:
+            "The provided email does not match the approved email for this staff ID.",
+        });
+      }
+
       // Set default password for all lecturers
       const temporaryPassword = "123456789";
 
@@ -766,6 +1259,7 @@ router.post(
       const teacher = new Teacher({
         name,
         email,
+        staff_id: normalizedStaffId,
         password_hash: temporaryPassword,
         role: "teacher",
       });
@@ -808,6 +1302,16 @@ router.post(
       .isEmail()
       .normalizeEmail({ gmail_remove_dots: false })
       .withMessage("Each teacher must have a valid email"),
+    body("teachers.*.staff_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Each teacher must include a staff ID")
+      .isLength({ min: 2, max: 40 })
+      .withMessage("Each staff ID must be 2-40 characters")
+      .matches(/^[a-zA-Z0-9/_-]+$/)
+      .withMessage(
+        "Staff ID can only contain letters, numbers, slash, underscore, and dash"
+      ),
   ],
   validate,
   auditLogger("admin_bulk_created_teachers"),
@@ -826,7 +1330,8 @@ router.post(
       // Process each teacher
       for (const teacherData of teachers) {
         try {
-          const { name, email } = teacherData;
+          const { name, email, staff_id } = teacherData;
+          const normalizedStaffId = normalizeStaffId(staff_id);
 
           // Check if teacher already exists
           const existingTeacher = await Teacher.findOne({ email });
@@ -834,7 +1339,50 @@ router.post(
             results.failed.push({
               name,
               email,
+              staff_id: normalizedStaffId,
               error: "Teacher with this email already exists",
+            });
+            continue;
+          }
+
+          const existingStaffId = await Teacher.findOne({
+            staff_id: normalizedStaffId,
+          });
+          if (existingStaffId) {
+            results.failed.push({
+              name,
+              email,
+              staff_id: normalizedStaffId,
+              error: "Staff ID already linked to an account",
+            });
+            continue;
+          }
+
+          const approvedStaff = await ApprovedStaff.findOne({
+            staff_id: normalizedStaffId,
+            is_active: true,
+          });
+          if (!approvedStaff) {
+            results.failed.push({
+              name,
+              email,
+              staff_id: normalizedStaffId,
+              error:
+                "Staff ID is not on the approved lecturer list or is inactive",
+            });
+            continue;
+          }
+
+          if (
+            approvedStaff.email &&
+            approvedStaff.email.toLowerCase() !== email.toLowerCase()
+          ) {
+            results.failed.push({
+              name,
+              email,
+              staff_id: normalizedStaffId,
+              error:
+                "Email does not match the approved email for this staff ID",
             });
             continue;
           }
@@ -843,6 +1391,7 @@ router.post(
           const teacher = new Teacher({
             name,
             email,
+            staff_id: normalizedStaffId,
             password_hash: temporaryPassword,
             role: "teacher",
           });
@@ -869,6 +1418,7 @@ router.post(
           results.failed.push({
             name: teacherData.name,
             email: teacherData.email,
+            staff_id: normalizeStaffId(teacherData.staff_id),
             error: "Internal error during creation",
           });
         }
@@ -1099,6 +1649,15 @@ router.patch(
       .isEmail()
       .normalizeEmail({ gmail_remove_dots: false })
       .withMessage("Valid email required"),
+    body("staff_id")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 40 })
+      .withMessage("Staff ID must be 2-40 characters")
+      .matches(/^[a-zA-Z0-9/_-]+$/)
+      .withMessage(
+        "Staff ID can only contain letters, numbers, slash, underscore, and dash"
+      ),
     body("role")
       .optional()
       .isIn(["teacher", "admin"])
@@ -1110,7 +1669,7 @@ router.patch(
   async (req, res) => {
     try {
       const { teacherId } = req.params;
-      const { name, email, role, active } = req.body;
+      const { name, email, staff_id, role, active } = req.body;
 
       const teacher = await Teacher.findById(teacherId);
       if (!teacher) {
@@ -1135,9 +1694,66 @@ router.patch(
         }
       }
 
+      let nextStaffId = teacher.staff_id;
+      if (staff_id) {
+        nextStaffId = normalizeStaffId(staff_id);
+
+        const existingStaffId = await Teacher.findOne({
+          staff_id: nextStaffId,
+          _id: { $ne: teacherId },
+        });
+        if (existingStaffId) {
+          return res.status(400).json({
+            error: "Staff ID already linked to another account",
+          });
+        }
+
+        const approvedStaff = await ApprovedStaff.findOne({
+          staff_id: nextStaffId,
+          is_active: true,
+        });
+        if (!approvedStaff) {
+          return res.status(400).json({
+            error: "Invalid staff ID",
+            message:
+              "This staff ID is not on the approved lecturer list or is inactive.",
+          });
+        }
+
+        const effectiveEmail = email || teacher.email;
+        if (
+          approvedStaff.email &&
+          approvedStaff.email.toLowerCase() !== effectiveEmail.toLowerCase()
+        ) {
+          return res.status(400).json({
+            error: "Staff ID/email mismatch",
+            message:
+              "The provided email does not match the approved email for this staff ID.",
+          });
+        }
+      }
+
+      if (email && nextStaffId) {
+        const approvedStaff = await ApprovedStaff.findOne({
+          staff_id: nextStaffId,
+          is_active: true,
+        });
+        if (
+          approvedStaff?.email &&
+          approvedStaff.email.toLowerCase() !== email.toLowerCase()
+        ) {
+          return res.status(400).json({
+            error: "Staff ID/email mismatch",
+            message:
+              "The provided email does not match the approved email for this staff ID.",
+          });
+        }
+      }
+
       // Update fields
       if (name) teacher.name = name;
       if (email) teacher.email = email;
+      if (staff_id) teacher.staff_id = nextStaffId;
       if (role) teacher.role = role;
       if (typeof active === "boolean") teacher.active = active;
 

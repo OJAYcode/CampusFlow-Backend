@@ -32,7 +32,7 @@ const options = {
         // ─── AUTH ────────────────────────────────────────────────────────────
         RegisterTeacherRequest: {
           type: "object",
-          required: ["name", "email", "password"],
+          required: ["name", "email", "password", "staff_id"],
           properties: {
             name: {
               type: "string",
@@ -50,10 +50,37 @@ const options = {
               minLength: 8,
               example: "securePass123",
             },
+            staff_id: {
+              type: "string",
+              example: "STAFF/CSC/001",
+              minLength: 2,
+              maxLength: 40,
+              description:
+                "Lecturer staff ID. Must exist in the approved staff directory.",
+            },
             role: {
               type: "string",
               enum: ["teacher", "admin"],
               example: "teacher",
+            },
+          },
+        },
+        CheckStaffIdRequest: {
+          type: "object",
+          required: ["staff_id"],
+          properties: {
+            staff_id: {
+              type: "string",
+              example: "STAFF/CSC/001",
+              minLength: 2,
+              maxLength: 40,
+            },
+            email: {
+              type: "string",
+              format: "email",
+              example: "jane@university.edu",
+              description:
+                "Optional. If provided, validates that this email matches the approved staff record.",
             },
           },
         },
@@ -443,7 +470,7 @@ const options = {
         // ─── ADMIN ───────────────────────────────────────────────────────────
         CreateTeacherByAdminRequest: {
           type: "object",
-          required: ["name", "email"],
+          required: ["name", "email", "staff_id"],
           properties: {
             name: {
               type: "string",
@@ -455,6 +482,12 @@ const options = {
               type: "string",
               format: "email",
               example: "john@university.edu",
+            },
+            staff_id: {
+              type: "string",
+              example: "STAFF/CSC/001",
+              minLength: 2,
+              maxLength: 40,
             },
             role: {
               type: "string",
@@ -478,7 +511,91 @@ const options = {
               format: "email",
               example: "john.updated@university.edu",
             },
+            staff_id: {
+              type: "string",
+              example: "STAFF/CSC/002",
+              minLength: 2,
+              maxLength: 40,
+            },
             role: { type: "string", enum: ["teacher", "admin"] },
+          },
+        },
+        StaffDirectoryCreateRequest: {
+          type: "object",
+          required: ["staff_id"],
+          properties: {
+            staff_id: {
+              type: "string",
+              example: "STAFF/CSC/001",
+              minLength: 2,
+              maxLength: 40,
+            },
+            name: {
+              type: "string",
+              example: "Dr. Jane Smith",
+            },
+            email: {
+              type: "string",
+              format: "email",
+              example: "jane.smith@university.edu",
+            },
+            department: {
+              type: "string",
+              example: "Computer Science",
+            },
+            notes: {
+              type: "string",
+              example: "Verified by HR records",
+            },
+            is_active: {
+              type: "boolean",
+              example: true,
+            },
+          },
+        },
+        StaffDirectoryBulkCreateRequest: {
+          type: "object",
+          required: ["staff"],
+          properties: {
+            staff: {
+              type: "array",
+              minItems: 1,
+              items: {
+                $ref: "#/components/schemas/StaffDirectoryCreateRequest",
+              },
+            },
+          },
+        },
+        StaffDirectoryUpdateRequest: {
+          type: "object",
+          properties: {
+            staff_id: {
+              type: "string",
+              example: "STAFF/CSC/001",
+              minLength: 2,
+              maxLength: 40,
+            },
+            name: {
+              type: "string",
+              example: "Dr. Jane Smith",
+            },
+            email: {
+              type: "string",
+              format: "email",
+              example: "jane.smith@university.edu",
+            },
+            department: {
+              type: "string",
+              example: "Computer Science",
+            },
+            notes: {
+              type: "string",
+              example: "Updated by admin",
+            },
+            is_active: {
+              type: "boolean",
+              example: false,
+            },
           },
         },
         CreateAdminRequest: {
@@ -683,6 +800,43 @@ const options = {
       },
 
       // ═══════════════ AUTH ═════════════════════════════════════════════════
+      "/api/auth/check-staff-id": {
+        post: {
+          tags: ["Auth"],
+          summary: "Check lecturer staff ID before signup",
+          description:
+            "Validates that a lecturer `staff_id` exists in the approved staff directory and is not already linked to an account. Optionally validates email match.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CheckStaffIdRequest" },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description:
+                "Validation result returned in `valid` and `available` fields.",
+              content: {
+                "application/json": {
+                  example: {
+                    valid: true,
+                    available: true,
+                    message: "Staff ID is valid and available for signup.",
+                    staff: {
+                      staff_id: "STAFF/CSC/001",
+                      name: "Dr. Jane Smith",
+                      department: "Computer Science",
+                    },
+                  },
+                },
+              },
+            },
+            400: { description: "Validation error" },
+          },
+        },
+      },
       "/api/auth/register_teacher": {
         post: {
           tags: ["Auth"],
@@ -1733,6 +1887,128 @@ const options = {
           responses: {
             200: { description: "System health and database status" },
             403: { description: "Admin access required" },
+          },
+        },
+      },
+      "/api/admin/staff-directory": {
+        get: {
+          tags: ["Admin"],
+          summary: "Get approved lecturer staff directory",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "search",
+              in: "query",
+              description: "Search by staff ID, name, email, or department",
+              schema: { type: "string" },
+            },
+            {
+              name: "is_active",
+              in: "query",
+              description: "Filter by active state",
+              schema: { type: "string", enum: ["true", "false", "all"] },
+            },
+            {
+              name: "page",
+              in: "query",
+              schema: { type: "integer", default: 1 },
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: { type: "integer", default: 20 },
+            },
+          ],
+          responses: {
+            200: { description: "Paginated staff directory records" },
+            403: { description: "Admin access required" },
+          },
+        },
+        post: {
+          tags: ["Admin"],
+          summary: "Create approved lecturer staff record",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/StaffDirectoryCreateRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            201: { description: "Staff directory record created" },
+            409: { description: "Staff ID already exists" },
+          },
+        },
+      },
+      "/api/admin/staff-directory/bulk": {
+        post: {
+          tags: ["Admin"],
+          summary: "Bulk create approved lecturer staff records",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/StaffDirectoryBulkCreateRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            201: { description: "Bulk import processed" },
+            400: { description: "Validation error" },
+          },
+        },
+      },
+      "/api/admin/staff-directory/{entryId}": {
+        patch: {
+          tags: ["Admin"],
+          summary: "Update a staff directory record",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "entryId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/StaffDirectoryUpdateRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            200: { description: "Staff directory record updated" },
+            404: { description: "Staff directory record not found" },
+          },
+        },
+        delete: {
+          tags: ["Admin"],
+          summary: "Delete a staff directory record",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "entryId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            200: { description: "Staff directory record deleted" },
+            400: { description: "Record linked to a teacher account" },
+            404: { description: "Staff directory record not found" },
           },
         },
       },
