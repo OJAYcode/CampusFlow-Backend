@@ -1,14 +1,15 @@
 {
-  "name": "unitrack-attendance-system",
+  "name": "campusflow-backend",
   "version": "1.0.0",
-  "description": "Unitrack Attendance System Backend",
+  "description": "CampusFlow backend for attendance, coursework, messaging, and academic operations",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "jest",
-    "seed:approved-staff": "node scripts/seed-approved-staff.js",
-    "seed:replace-admin": "node scripts/replace-admin-account.js"
+    "seed:academic": "node scripts/seed-academic-structure.js",
+    "seed:students:v1": "node scripts/seed-students-v1.js",
+    "push:keys": "node scripts/generate-vapid-keys.js"
   },
   "keywords": [
     "attendance",
@@ -23,6 +24,7 @@
     "axios": "^1.11.0",
     "bcrypt": "^5.1.0",
     "cors": "^2.8.5",
+    "docx": "^9.6.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^6.8.1",
@@ -38,7 +40,8 @@
     "pdfkit": "^0.13.0",
     "qrcode": "^1.5.3",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "jest": "^29.6.2",

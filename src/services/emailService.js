@@ -26,7 +26,7 @@ class EmailService {
           process.env.EMAIL_FROM_ADDRESS ||
           process.env.EMAIL_FROM ||
           "a4b171001@smtp-brevo.com";
-        this.senderName = process.env.EMAIL_FROM_NAME || "UniTrack";
+        this.senderName = process.env.EMAIL_FROM_NAME || "CampusFlow";
         console.log("✅ Brevo email service configured");
       }
 
@@ -194,6 +194,22 @@ class EmailService {
     return this.sendOTP(email, otp, "password reset");
   }
 
+  async sendPasswordResetLink(userEmail, userName, resetLink) {
+    const template = await this.loadTemplate("reset-password");
+    if (!template) return { skipped: true, reason: "Template not found" };
+    const html = template({
+      userName,
+      resetLink,
+      expiresIn: process.env.JWT_RESET_EXPIRES_IN || "1 hour",
+      supportEmail: this.senderEmail,
+    });
+    return this._send({
+      to: userEmail,
+      subject: "Reset Your Smart Attendance Account Password",
+      html,
+    });
+  }
+
   async sendWelcomeEmail(teacherEmail, teacherName, temporaryPassword) {
     const template = await this.loadTemplate("welcome");
     if (!template) return { skipped: true, reason: "Template not found" };
@@ -205,7 +221,7 @@ class EmailService {
     });
     return this._send({
       to: teacherEmail,
-      subject: "Welcome to UniTrack Attendance System",
+      subject: "Welcome to CampusFlow",
       html,
     });
   }
@@ -301,7 +317,7 @@ class EmailService {
         : null,
       ip_address: supportData.ip_address,
       user_agent: supportData.user_agent,
-      systemName: "UniTrack System",
+      systemName: "CampusFlow",
     });
     return this._send({
       to: adminEmail,
@@ -336,7 +352,7 @@ class EmailService {
       ticketId: supportData.ticketId,
       expectedResponse:
         expectedResponses[supportData.priority] || "as soon as possible",
-      systemName: "UniTrack System",
+      systemName: "CampusFlow",
     });
     return this._send({
       to: userEmail,

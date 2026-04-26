@@ -1,402 +1,224 @@
-# UniTrack Attendance System Backend
-
-A comprehensive backend system for managing classroom attendance with geolocation verification, real-time monitoring, and automated reporting.
-
-## Features
-
-### 🔐 Authentication & Authorization
-
-- JWT-based authentication for teachers and admins
-- Email-based OTP verification for registration and password reset
-- Role-based access control (Teacher/Admin)
-- Secure password hashing with bcrypt
-
-### 🎓 Course Management
-
-- Create, update, and delete courses
-- Add/remove students to courses
-- Bulk student management operations
-
-### 📍 Location-Based Attendance
-
-- Geolocation verification with configurable radius
-- Device fingerprinting to prevent duplicate submissions
-- QR code and session code based attendance submission
-- Real-time attendance monitoring
-
-### 📊 Reporting & Analytics
-
-- CSV and PDF attendance reports
-- Email delivery of reports
-- Attendance statistics and trends
-- Admin dashboard with system analytics
-
-### 📧 Email System
-
-- Automated email notifications
-- OTP delivery for verification
-- Session start notifications
-- Attendance report delivery
-- Customizable email templates
-
-### 🔍 Audit & Security
-
-- Comprehensive audit logging
-- Rate limiting for sensitive endpoints
-- Input validation and sanitization
-- Security headers with Helmet.js
-
-## Installation
-
-1. **Clone the repository**
-
-   ```bash
-   git clone <repository-url>
-   cd UniTrack\ Backend
-   ```
-
-2. **Install dependencies**
-
-   ```bash
-   npm install
-   ```
-
-3. **Environment Setup**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Configure the following environment variables:
-
-   ```env
-   NODE_ENV=development
-   PORT=5000
-   MONGODB_URI=mongodb://localhost:27017/UniTrack_attendance
-   JWT_SECRET=your-super-secret-jwt-key
-   EMAIL_HOST=smtp.gmail.com
-   EMAIL_PORT=587
-   EMAIL_USER=your-email@gmail.com
-   EMAIL_PASS=your-app-password
-   EMAIL_FROM=UniTrack Attendance <noreply@UniTrack.edu>
-   ```
-
-4. **Start MongoDB**
-
-   ```bash
-   # If using local MongoDB
-   mongod
-
-   # Or start MongoDB service
-   sudo systemctl start mongodb
-   ```
-
-5. **Run the application**
-
-   ```bash
-   # Development mode
-   npm run dev
-
-   # Production mode
-   npm start
-   ```
-
-## API Endpoints
-
-### Authentication
-
-- `POST /api/auth/check-staff-id` - Validate lecturer staff ID before signup
-- `POST /api/auth/register_teacher` - Register new teacher (requires `staff_id`)
-- `POST /api/auth/verify_registration` - Complete registration with OTP
-- `POST /api/auth/login` - Teacher login
-- `POST /api/auth/request_otp` - Request OTP for password reset
-- `POST /api/auth/verify_otp` - Verify OTP and reset password
-
-### Courses
-
-- `GET /api/courses` - Get teacher's courses
-- `POST /api/courses` - Create new course
-- `PATCH /api/courses/:id` - Update course
-- `DELETE /api/courses/:id` - Delete course
-
-### Students
-
-- `POST /api/courses/:courseId/students` - Add student to course
-- `GET /api/courses/:courseId/students` - Get course students
-- `DELETE /api/courses/:courseId/students/:id` - Remove student
-- `PATCH /api/courses/:courseId/students/:id/mark` - Manual attendance
-
-### Sessions
-
-- `POST /api/courses/:courseId/sessions` - Start attendance session
-- `GET /api/courses/:courseId/sessions` - Get course sessions
-- `GET /api/sessions/:id` - Get session details
-- `PATCH /api/sessions/:id/end` - End session early
-- `GET /api/sessions/:id/live` - Real-time attendance monitoring
-
-### Attendance
-
-- `POST /api/attendance/submit` - Submit attendance (public)
-- `GET /api/attendance/session/:sessionId` - Get session attendance
-- `GET /api/attendance/course/:courseId/report.csv` - Download CSV report
-- `GET /api/attendance/course/:courseId/report.pdf` - Download PDF report
-- `GET /api/attendance/course/:courseId/stats` - Course statistics
-
-### Admin (Admin Role Required)
-
-- `GET /api/admin/stats` - System statistics
-- `GET /api/admin/staff-directory` - List/search approved lecturer staff IDs
-- `POST /api/admin/staff-directory` - Add approved lecturer staff ID
-- `POST /api/admin/staff-directory/bulk` - Bulk add approved staff IDs
-- `PATCH /api/admin/staff-directory/:entryId` - Update staff directory record
-- `DELETE /api/admin/staff-directory/:entryId` - Delete staff directory record
-- `GET /api/admin/teachers` - Get all teachers
-- `POST /api/admin/teachers` - Create teacher account (requires `staff_id`)
-- `PATCH /api/admin/teachers/:id` - Update teacher
-- `DELETE /api/admin/teachers/:id` - Delete teacher
-- `GET /api/admin/audit-logs` - System audit logs
-- `GET /api/admin/health` - System health check
-
-## Database Schema
-
-### Teachers
-
-- `id` (ObjectId) - Primary key
-- `name` (String) - Teacher's full name
-- `email` (String, unique) - Email address
-- `staff_id` (String, unique) - Lecturer staff ID (validated against staff directory)
-- `password_hash` (String) - Hashed password
-- `role` (String) - 'teacher' or 'admin'
-- `created_at` (Date) - Registration date
-- `last_login` (Date) - Last login timestamp
-
-### Courses
-
-- `id` (ObjectId) - Primary key
-- `teacher_id` (ObjectId) - Reference to teacher
-- `course_code` (String) - Course identifier
-- `title` (String) - Course title
-- `created_at` (Date) - Creation date
-
-### Students
-
-- `id` (ObjectId) - Primary key
-- `matric_no` (String, unique) - Matriculation number
-- `name` (String) - Student's full name
-- `email` (String) - Email address
-- `phone` (String) - Phone number
-- `created_at` (Date) - Registration date
-
-### Sessions
-
-- `id` (ObjectId) - Primary key
-- `course_id` (ObjectId) - Reference to course
-- `teacher_id` (ObjectId) - Reference to teacher
-- `session_code` (String) - 4-digit session code
-- `start_ts` (Date) - Session start time
-- `expiry_ts` (Date) - Session expiry time
-- `lat` (Number) - Latitude coordinate
-- `lng` (Number) - Longitude coordinate
-- `radius_m` (Number) - Allowed radius in meters
-- `nonce` (String) - Security nonce
-
-### Attendance
-
-- `id` (ObjectId) - Primary key
-- `session_id` (ObjectId) - Reference to session
-- `course_id` (ObjectId) - Reference to course
-- `student_id` (ObjectId) - Reference to student
-- `matric_no_submitted` (String) - Submitted matric number
-- `device_fingerprint` (String) - Device identifier
-- `lat` (Number) - Submission latitude
-- `lng` (Number) - Submission longitude
-- `status` (String) - 'present', 'absent', 'rejected', 'manual_present'
-- `submitted_at` (Date) - Submission timestamp
-- `receipt_signature` (String) - Cryptographic receipt
-
-## Security Features
-
-### Authentication
-
-- JWT tokens with configurable expiration
-- Secure password hashing with bcrypt (12 rounds)
-- Email-based OTP verification
-
-### Rate Limiting
-
-- General API rate limiting (100 requests/15 minutes)
-- Strict rate limiting for sensitive endpoints (5 requests/15 minutes)
-- OTP rate limiting (1 request/minute)
-- Attendance submission rate limiting (3 requests/minute)
-
-### Input Validation
-
-- Comprehensive input validation using express-validator
-- SQL injection prevention
-- XSS protection
-- CORS configuration
-
-### Geolocation Security
-
-- Device fingerprinting to prevent duplicate submissions
-- Location verification with configurable radius
-- Cryptographic receipt generation for audit trails
-
-## Email Configuration
-
-The system supports multiple email providers. Configure your SMTP settings in the environment variables:
-
-```env
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASS=your-app-password
+# CampusFlow Backend
+
+CampusFlow is a modular university backend built with Node.js, Express, MongoDB, and Mongoose. It combines smart attendance with academic delivery features such as course management, materials, assignments, assessments, messaging, reporting, and admin oversight.
+
+## What This Backend Supports
+
+- Student registration only when the matric number exists in seeded institutional records
+- Core and elective course enrollment with approval workflow
+- Multiple lecturers assigned to a single course
+- Smart attendance sessions with session code, geofence, duplicate prevention, and device reuse checks
+- Course materials with multipart upload support
+- Assignments and assignment submissions
+- Online assessments with attempts and objective scoring hooks
+- Announcements and course messaging
+- Admin reporting, oversight, and audit-friendly operations
+- Extensible face-verification placeholders for future attendance identity strengthening
+
+## Tech Stack
+
+- Node.js
+- Express
+- MongoDB + Mongoose
+- JWT authentication
+- `express-validator`
+- `multer`
+- Swagger UI
+- Jest + Supertest
+
+## Project Structure
+
+```text
+src/
+  app.js
+  server.js
+  config/
+  constants/
+  controllers/
+  middlewares/
+  models/
+  routes/v1/
+  services/
+  templates/email/
+  utils/
+  validators/
+scripts/
+tests/
+uploads/
 ```
 
-### Gmail Setup
+## Core Business Rules
 
-1. Enable 2-factor authentication
-2. Generate an app-specific password
-3. Use the app password in EMAIL_PASS
+1. A student cannot register unless the matric number exists in `seeded_students`.
+2. Seeded student data is the source of truth for faculty, department, level, and programme mapping.
+3. Core courses are auto-enrolled for verified students.
+4. Electives are student-selected and stay pending until approved.
+5. Only electives valid for the student's department, level, and semester can be selected.
+6. A course can have multiple lecturers through a dedicated course-lecturer relationship.
+7. Only assigned lecturers can manage course content and attendance for that course.
+8. Only enrolled students can access protected course features.
+9. Attendance validates session status, session code, enrollment, geofence, duplicate submission, and suspicious device reuse.
+10. The attendance module is designed to support future identity-strengthening steps like registered-device policy, OTP, or face verification.
 
-### Email Templates
-
-Email templates are located in `src/templates/email/` and use Handlebars for templating.
-
-## Development
+## Getting Started
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
-- MongoDB (v4.4 or higher)
-- npm or yarn
+- Node.js 18+ recommended
+- MongoDB running locally or remotely
 
-### Development Tools
-
-- `nodemon` - Automatic server restart
-- `jest` - Testing framework
-- `supertest` - API testing
-
-### Running Tests
+### Install
 
 ```bash
-npm test
+npm install
 ```
 
-### Code Structure
+### Configure Environment
 
-```
-src/
-├── config/          # Database and configuration
-├── middleware/      # Express middleware
-├── models/         # Mongoose models
-├── routes/         # API route handlers
-├── services/       # Business logic services
-├── templates/      # Email templates
-├── utils/          # Utility functions
-└── server.js       # Main application file
-```
+Create `.env` from `.env.example`.
 
-## Deployment
+Important variables include:
 
-### Environment Variables
-
-Ensure all production environment variables are set:
-
-- `NODE_ENV=production`
-- `MONGODB_URI` - Production database URI
-- `JWT_SECRET` - Strong secret key
-- Email configuration for production SMTP
-
-### Production Considerations
-
-1. Use a reverse proxy (nginx)
-2. Enable SSL/TLS certificates
-3. Set up MongoDB replica sets
-4. Configure log aggregation
-5. Set up monitoring and alerts
-6. Regular database backups
-
-### Docker Deployment
-
-```dockerfile
-FROM node:16-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-EXPOSE 5000
-CMD ["npm", "start"]
+```env
+NODE_ENV=development
+PORT=10000
+MONGODB_URI=mongodb://127.0.0.1:27017/unitrack
+JWT_SECRET=change-me
+JWT_REFRESH_SECRET=change-me-too
+JWT_RESET_SECRET=reset-secret
+JWT_EXPIRES_IN=1d
+JWT_REFRESH_EXPIRES_IN=7d
+JWT_RESET_EXPIRES_IN=15m
+FRONTEND_URL=http://localhost:3000
+FRONTEND_RESET_PASSWORD_URL=http://localhost:3000/reset-password
+BREVO_API_KEY=your-brevo-key
+EMAIL_FROM_ADDRESS=noreply@example.com
+EMAIL_FROM_NAME=CampusFlow
 ```
 
-## Monitoring & Logging
-
-### Health Check
-
-- Endpoint: `GET /health`
-- Monitors database connectivity
-- Returns system status and metrics
-
-### Audit Logging
-
-- All user actions are logged
-- Admin audit trail
-- Security event logging
-
-### Performance Monitoring
-
-- Request/response times
-- Database query performance
-- Error rate tracking
-
-## API Testing
-
-Use tools like Postman or curl to test the API:
+### Seed Data
 
 ```bash
-# Seed approved lecturer staff IDs (required before lecturer signup)
-npm run seed:approved-staff
-# Optional: use your own JSON file and replace existing directory records
-node scripts/seed-approved-staff.js --file ./scripts/approved-staff.seed.sample.json --replace
-
-# Register a teacher
-curl -X POST http://localhost:5000/api/auth/register_teacher \
-  -H "Content-Type: application/json" \
-  -d '{"name":"John Doe","email":"john@example.com","password":"password123","staff_id":"STAFF/CSC/001"}'
-
-# Login
-curl -X POST http://localhost:5000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"john@example.com","password":"password123"}'
+npm run seed:academic
+npm run seed:students:v1
 ```
 
-## Contributing
+### Run
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass
-6. Submit a pull request
+```bash
+npm run dev
+```
 
-## License
+If port `10000` is already in use on your machine, change `PORT` in `.env` to a free port.
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## API Overview
 
-## Support
+The active API is versioned under `/api/v1`.
 
-For support and questions:
+### Auth
 
-- Create an issue in the repository
-- Check the documentation
-- Review the API endpoints above
+- `POST /api/v1/auth/student/register`
+- `POST /api/v1/auth/student/login`
+- `POST /api/v1/auth/lecturer/login`
+- `POST /api/v1/auth/admin/login`
+- `POST /api/v1/auth/refresh-token`
+- `POST /api/v1/auth/forgot-password`
+- `POST /api/v1/auth/reset-password`
+- `GET /api/v1/auth/me`
 
-## Version History
+### Admin
 
-### v1.0.0
+- Manage faculties, departments, seeded students, lecturers, admins, courses, and course-lecturer assignments
+- Review and approve or reject elective requests
+- View attendance sessions, attendance records, materials, assignments, assessment attempts, communications, and audit logs
+- Generate academic and attendance reports
+- Export course reports as CSV or PDF
 
-- Initial release
-- Core attendance functionality
-- Email system integration
-- Admin dashboard
-- Comprehensive security features
+### Lecturers
+
+- View assigned courses and course workspace summaries
+- Create attendance sessions
+- Upload materials
+- Create, update, and delete assignments
+- View and grade assignment submissions
+- Create, update, and delete assessments
+- View attempts
+- Create announcements
+- Send and receive course-related messages
+- Export course reports
+
+### Students
+
+- View profile and enrollments
+- View eligible electives and submit elective selections
+- Access materials, assignments, assessments, announcements, and messages for enrolled courses
+- Submit assignments
+- Start and submit assessments
+- Submit attendance for active sessions
+
+### Shared Module Routes
+
+- `/api/v1/attendance`
+- `/api/v1/materials`
+- `/api/v1/assignments`
+- `/api/v1/assessments`
+- `/api/v1/communication`
+
+## Uploads
+
+Multipart upload support is enabled with `multer`.
+
+- Materials use the local `uploads/materials` path
+- Assignment submissions use the local `uploads/assignments` path
+
+The storage layer is intentionally simple and can later be swapped for S3, Cloudinary, or another provider through the storage service abstraction.
+
+## Reporting
+
+Current reporting coverage includes:
+
+- Attendance by course
+- Enrollment summary
+- Assignment summary
+- Assessment summary
+- Combined course academic report
+- CSV/PDF export for course academic reports
+
+## Testing
+
+Run the suite with:
+
+```bash
+npm test -- --runInBand
+```
+
+Current automated coverage includes:
+
+- app smoke checks
+- auth service behavior
+- enrollment service behavior
+- attendance anti-fraud service behavior
+
+## Swagger
+
+Swagger UI is mounted from the runtime and documents the versioned API through the app bootstrap in `src/app.js`.
+
+## Email and Password Reset
+
+Password reset is integrated into the modular auth layer. The backend can send reset links through the Brevo-backed email service using the templates in `src/templates/email/`.
+
+## Face Verification Hooks
+
+The attendance flow already includes future-ready fields for biometric verification:
+
+- `attendance_sessions.faceVerificationEnabled`
+- `attendance_records.faceImageUrl`
+- `attendance_records.faceMatchScore`
+- `attendance_records.faceVerificationStatus`
+- `face_verification_logs`
+
+These fields are placeholders only. A biometric provider can be integrated later without redesigning the attendance module.
+
+## Status
+
+The legacy runtime has been removed. The repository now targets the modular `/api/v1` backend only. See `LEGACY_STATUS.md` and `API_V1_SUMMARY.md` for implementation notes.
