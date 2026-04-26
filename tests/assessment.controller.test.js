@@ -45,6 +45,10 @@ describe("assessment controller", () => {
     const req = {
       params: { id: "assessment-1" },
       user: { _id: "student-1" },
+      body: {
+        cameraGranted: true,
+        microphoneGranted: true,
+      },
       get: jest.fn().mockReturnValue("jest-agent"),
       ip: "127.0.0.1",
     };
@@ -129,6 +133,10 @@ describe("assessment controller", () => {
     const req = {
       params: { id: "assessment-3" },
       user: { _id: "student-1" },
+      body: {
+        cameraGranted: true,
+        microphoneGranted: true,
+      },
       get: jest.fn().mockReturnValue("jest-agent"),
       ip: "127.0.0.1",
     };

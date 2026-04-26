@@ -623,14 +623,8 @@ exports.sendMessage = catchAsync(async (req, res) => {
   let resolvedRecipientIds = Array.isArray(req.body.recipientIds) ? req.body.recipientIds : [];
 
   if (req.body.courseId) {
-    const courseAssignment = await CourseLecturer.findOne({
-      course: req.body.courseId,
-      lecturer: req.user._id,
-    }).populate("course", "department level");
-
-    if (!courseAssignment?.course) {
-      throw new ApiError(403, "Lecturer is not assigned to this course");
-    }
+    await ensureLecturerAssigned(req.body.courseId, req.user._id);
+    let courseAssignment = null;
 
     if (req.body.targetAudience === "course_approved") {
       const approvedRecipients = await CourseEnrollment.find({
@@ -642,6 +636,15 @@ exports.sendMessage = catchAsync(async (req, res) => {
         .map((item) => item.student?.toString?.())
         .filter(Boolean);
     } else if (req.body.targetAudience === "department_level") {
+      courseAssignment = await CourseLecturer.findOne({
+        course: req.body.courseId,
+        lecturer: req.user._id,
+      }).populate("course", "department level");
+
+      if (!courseAssignment?.course) {
+        throw new ApiError(403, "Lecturer is not assigned to this course");
+      }
+
       const cohortRecipients = await User.find({
         role: ROLES.STUDENT,
         status: "active",
@@ -652,32 +655,8 @@ exports.sendMessage = catchAsync(async (req, res) => {
       resolvedRecipientIds = cohortRecipients
         .map((item) => item._id?.toString?.())
         .filter(Boolean);
-    } else {
-      const approvedRecipients = await CourseEnrollment.find({
-        course: req.body.courseId,
-        approvalStatus: "approved",
-        student: { $in: resolvedRecipientIds },
-      }).select("student");
-
-      const cohortRecipients = await User.find({
-        _id: { $in: resolvedRecipientIds },
-        role: ROLES.STUDENT,
-        department: courseAssignment.course.department,
-        level: courseAssignment.course.level,
-      }).select("_id");
-
-      const validRecipientIds = new Set([
-        approvedRecipients.map((item) => item.student?.toString?.()).filter(Boolean),
-        cohortRecipients.map((item) => item._id?.toString?.()).filter(Boolean),
-      ].flat());
-
-      const invalidRecipients = resolvedRecipientIds.filter(
-        (recipientId) => !validRecipientIds.has(recipientId?.toString?.()),
-      );
-
-      if (invalidRecipients.length) {
-        throw new ApiError(400, "One or more selected recipients are outside the allowed audience for this course");
-      }
+    } else if (!resolvedRecipientIds.length) {
+      throw new ApiError(400, "No valid student recipients were found for this audience");
     }
 
     resolvedRecipientIds = Array.from(new Set(resolvedRecipientIds.filter(Boolean)));

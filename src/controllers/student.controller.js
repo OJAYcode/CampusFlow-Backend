@@ -58,7 +58,10 @@ function normalizeOnlineMaterialResult(item) {
 }
 
 exports.profile = catchAsync(async (req, res) => {
-  const student = await req.user.populate("faculty department");
+  const student =
+    typeof req.user?.populate === "function"
+      ? await req.user.populate("faculty department")
+      : req.user;
   return apiResponse(res, { message: "Student profile fetched", data: student });
 });
 
@@ -76,7 +79,10 @@ exports.updateProfile = catchAsync(async (req, res) => {
   }
 
   await req.user.save();
-  const student = await req.user.populate("faculty department");
+  const student =
+    typeof req.user?.populate === "function"
+      ? await req.user.populate("faculty department")
+      : req.user;
 
   return apiResponse(res, { message: "Student profile updated", data: student });
 });

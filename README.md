@@ -199,6 +199,68 @@ Current automated coverage includes:
 - enrollment service behavior
 - attendance anti-fraud service behavior
 
+## Deployment
+
+This backend is ready to deploy on Render or Railway as a standard Node web service.
+
+### Start Command
+
+```bash
+npm start
+```
+
+### Build Command
+
+```bash
+npm install
+```
+
+### Health Check
+
+Use:
+
+```text
+/health
+```
+
+### Required Environment Variables
+
+- `NODE_ENV`
+- `PORT`
+- `MONGODB_URI`
+- `JWT_SECRET`
+- `JWT_EXPIRES_IN`
+- `JWT_REFRESH_SECRET`
+- `JWT_REFRESH_EXPIRES_IN`
+- `JWT_RESET_SECRET`
+- `JWT_RESET_EXPIRES_IN`
+- `FRONTEND_URL`
+- `FRONTEND_RESET_PASSWORD_URL`
+
+### Optional Environment Variables
+
+- `BREVO_API_KEY`
+- `EMAIL_FROM_ADDRESS`
+- `EMAIL_FROM_NAME`
+- `WEB_PUSH_PUBLIC_KEY`
+- `WEB_PUSH_PRIVATE_KEY`
+- `WEB_PUSH_SUBJECT`
+- `BCRYPT_ROUNDS`
+
+### Render Notes
+
+- Root directory: repository root
+- Build command: `npm install`
+- Start command: `npm start`
+- Health check path: `/health`
+
+### Railway Notes
+
+- Root directory: repository root
+- Build command: auto-detected, or `npm install`
+- Start command: `npm start`
+- Exposed port: use Railway provided `PORT`
+
 ## Swagger
 
 Swagger UI is mounted from the runtime and documents the versioned API through the app bootstrap in `src/app.js`.

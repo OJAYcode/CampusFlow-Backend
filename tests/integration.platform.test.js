@@ -242,7 +242,11 @@ describe("platform integration workflow", () => {
 
     const assessmentStartResponse = await request(app)
       .post(`/api/v1/assessments/${assessment._id.toString()}/start`)
-      .set("Authorization", `Bearer ${studentToken}`);
+      .set("Authorization", `Bearer ${studentToken}`)
+      .send({
+        cameraGranted: true,
+        microphoneGranted: true,
+      });
 
     expect(assessmentStartResponse.statusCode).toBe(201);
 

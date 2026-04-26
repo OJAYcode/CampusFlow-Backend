@@ -3,6 +3,7 @@ const Course = require("../models/course.model");
 const Message = require("../models/message.model");
 const apiResponse = require("../utils/apiResponse");
 const catchAsync = require("../utils/catchAsync");
+const ApiError = require("../utils/ApiError");
 const { getPagination } = require("../utils/pagination");
 
 function getCourseIdFromThreadKey(threadKey) {
@@ -22,6 +23,15 @@ async function resolveThreadCourse(message, cache) {
   }
 
   return cache.get(courseId);
+}
+
+function toPlainMessage(message, extra = {}) {
+  const base =
+    message && typeof message.toObject === "function"
+      ? message.toObject()
+      : { ...message };
+
+  return { ...base, ...extra };
 }
 
 exports.listAnnouncements = catchAsync(async (req, res) => {
@@ -103,10 +113,7 @@ exports.getThreadMessages = catchAsync(async (req, res) => {
     .sort({ createdAt: 1 });
 
   if (!messages.length) {
-    return apiResponse(res, {
-      message: "Thread messages fetched",
-      data: { items: [], total: 0, page, limit, totalPages: 1 },
-    });
+    throw new ApiError(404, "No accessible messages were found for this thread");
   }
 
   const courseCache = new Map();
@@ -114,7 +121,7 @@ exports.getThreadMessages = catchAsync(async (req, res) => {
     messages.map(async (message) => {
       if (message.course) return message;
       const course = await resolveThreadCourse(message, courseCache);
-      return { ...message.toObject(), course };
+      return toPlainMessage(message, { course });
     }),
   );
 

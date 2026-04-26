@@ -154,7 +154,11 @@ describe("workflow route coverage", () => {
       .set(
         "Authorization",
         `Bearer ${tokenFor("680000000000000000000001", "student", "student@test.com")}`,
-      );
+      )
+      .send({
+        cameraGranted: true,
+        microphoneGranted: true,
+      });
 
     expect(response.statusCode).toBe(201);
     expect(response.body.success).toBe(true);
