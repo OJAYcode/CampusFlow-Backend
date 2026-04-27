@@ -21,6 +21,18 @@ app.use(requestContext);
 app.use(auditContext);
 app.use(apiLimiter);
 
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "CampusFlow API is running",
+    data: {
+      health: "/health",
+      docs: "/api-docs",
+      version: "/api/v1",
+    },
+  });
+});
+
 app.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
