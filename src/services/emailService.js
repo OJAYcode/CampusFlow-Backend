@@ -2,6 +2,7 @@ const { BrevoClient } = require("@getbrevo/brevo");
 const handlebars = require("handlebars");
 const fs = require("fs").promises;
 const path = require("path");
+const { buildUrl, getStaffFrontendUrl } = require("../utils/frontendUrls");
 
 class EmailService {
   constructor() {
@@ -217,7 +218,7 @@ class EmailService {
       teacherName,
       teacherEmail,
       temporaryPassword,
-      loginUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+      loginUrl: getStaffFrontendUrl(),
     });
     return this._send({
       to: teacherEmail,
@@ -246,7 +247,7 @@ class EmailService {
       studentCount,
       message,
       requestId,
-      approveUrl: `${process.env.FRONTEND_URL || "http://localhost:3000"}/share-requests/${requestId}`,
+      approveUrl: buildUrl(getStaffFrontendUrl(), `/share-requests/${requestId}`),
       timestamp: new Date().toLocaleString(),
     });
     return this._send({
@@ -372,7 +373,7 @@ class EmailService {
     is_reassignment = false,
     previous_lecturer = null,
     reason = null,
-    login_url = process.env.FRONTEND_URL || "http://localhost:3000",
+    login_url = getStaffFrontendUrl(),
   }) {
     const template = await this.loadTemplate("course-assignment");
     if (!template) return { skipped: true, reason: "Template not found" };

@@ -8,11 +8,25 @@ const { apiLimiter } = require("./middlewares/rateLimit.middleware");
 const { notFoundHandler, errorHandler } = require("./middlewares/error.middleware");
 const requestContext = require("./middlewares/requestContext.middleware");
 const auditContext = require("./middlewares/audit.middleware");
+const { getAllowedCorsOrigins } = require("./utils/frontendUrls");
 const v1Routes = require("./routes/v1");
 
 const app = express();
+const allowedCorsOrigins = getAllowedCorsOrigins();
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      callback(null, allowedCorsOrigins.includes(origin));
+    },
+    credentials: true,
+  }),
+);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -29,6 +43,7 @@ app.get("/", (req, res) => {
       health: "/health",
       docs: "/api-docs",
       version: "/api/v1",
+      corsOrigins: allowedCorsOrigins,
     },
   });
 });

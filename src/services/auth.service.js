@@ -5,6 +5,7 @@ const ApiError = require("../utils/ApiError");
 const jwt = require("jsonwebtoken");
 const { signAccessToken, signRefreshToken, signPasswordResetToken } = require("../utils/jwt");
 const { ROLES } = require("../constants/roles");
+const { getResetPasswordUrlForRole } = require("../utils/frontendUrls");
 const { autoEnrollCoreCourses } = require("./enrollment.service");
 const emailService = require("./emailServiceInstance");
 
@@ -166,10 +167,7 @@ async function requestPasswordReset(email) {
   }
 
   const resetToken = signPasswordResetToken(user);
-  const resetLinkBase =
-    process.env.FRONTEND_RESET_PASSWORD_URL ||
-    process.env.FRONTEND_URL ||
-    "http://localhost:3000/reset-password";
+  const resetLinkBase = getResetPasswordUrlForRole(user.role);
   const separator = resetLinkBase.includes("?") ? "&" : "?";
   const resetLink = `${resetLinkBase}${separator}token=${encodeURIComponent(resetToken)}`;
 

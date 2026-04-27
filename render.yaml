@@ -28,6 +28,10 @@ services:
         sync: false
       - key: FRONTEND_RESET_PASSWORD_URL
         sync: false
+      - key: STUDENT_FRONTEND_URL
+        sync: false
+      - key: STAFF_FRONTEND_URL
+        sync: false
       - key: BREVO_API_KEY
         sync: false
       - key: EMAIL_FROM_ADDRESS

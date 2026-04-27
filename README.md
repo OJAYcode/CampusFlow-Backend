@@ -91,6 +91,8 @@ JWT_REFRESH_EXPIRES_IN=7d
 JWT_RESET_EXPIRES_IN=15m
 FRONTEND_URL=http://localhost:3000
 FRONTEND_RESET_PASSWORD_URL=http://localhost:3000/reset-password
+STUDENT_FRONTEND_URL=http://localhost:3000
+STAFF_FRONTEND_URL=http://localhost:3001
 BREVO_API_KEY=your-brevo-key
 EMAIL_FROM_ADDRESS=noreply@example.com
 EMAIL_FROM_NAME=CampusFlow
@@ -236,6 +238,8 @@ Use:
 - `JWT_RESET_EXPIRES_IN`
 - `FRONTEND_URL`
 - `FRONTEND_RESET_PASSWORD_URL`
+- `STUDENT_FRONTEND_URL`
+- `STAFF_FRONTEND_URL`
 
 ### Optional Environment Variables
 
@@ -253,6 +257,9 @@ Use:
 - Build command: `npm install`
 - Start command: `npm start`
 - Health check path: `/health`
+- Set `STUDENT_FRONTEND_URL` to your student Vercel deployment URL
+- Set `STAFF_FRONTEND_URL` to your staff Vercel deployment URL
+- `FRONTEND_URL` and `FRONTEND_RESET_PASSWORD_URL` remain supported as backward-compatible fallbacks
 
 ### Railway Notes
 
