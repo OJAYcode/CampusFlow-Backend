@@ -584,6 +584,14 @@ exports.publishAnnouncement = catchAsync(async (req, res) => {
         courseId: String(req.body.courseId),
       },
     });
+
+    // also notify any SSE subscribers connected to the server
+    try {
+      const { notifyForUsers } = require("../services/announcement-stream.service");
+      notifyForUsers(studentIds, { id: String(announcement._id), title: announcement.title, body: announcement.body, courseId: String(req.body.courseId), url: "/student/announcements" });
+    } catch (e) {
+      // ignore if stream service fails
+    }
   }
 
   return apiResponse(res, { statusCode: 201, message: "Announcement published", data: announcement });

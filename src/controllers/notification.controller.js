@@ -61,3 +61,30 @@ exports.listNotifications = catchAsync(async (req, res) => {
   const notifications = await Notification.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50);
   return apiResponse(res, { message: "Notifications fetched", data: notifications });
 });
+
+exports.streamNotifications = catchAsync(async (req, res) => {
+  // keep-alive SSE stream for per-user notifications
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  // send a ready event
+  res.write(`event: ready\ndata: ${JSON.stringify({ message: 'connected' })}\n\n`);
+
+  const { subscribe } = require("../services/announcement-stream.service");
+  const unsubscribe = subscribe(req.user._id, res);
+
+  // heartbeat
+  const hb = setInterval(() => {
+    try {
+      res.write(`event: heartbeat\ndata: ${JSON.stringify({ ts: new Date().toISOString() })}\n\n`);
+    } catch (e) {}
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(hb);
+    unsubscribe();
+    res.end();
+  });
+});
