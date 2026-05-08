@@ -1,9 +1,11 @@
 const Notification = require("../models/notification.model");
 const PushSubscription = require("../models/pushSubscription.model");
+const User = require("../models/user.model");
 const apiResponse = require("../utils/apiResponse");
 const catchAsync = require("../utils/catchAsync");
 const ApiError = require("../utils/ApiError");
 const { getPublicConfig } = require("../services/pushNotification.service");
+const jwt = require("jsonwebtoken");
 
 exports.getPushPublicConfig = catchAsync(async (_req, res) => {
   return apiResponse(res, {
@@ -63,6 +65,25 @@ exports.listNotifications = catchAsync(async (req, res) => {
 });
 
 exports.streamNotifications = catchAsync(async (req, res) => {
+  // authenticate via token query param or Authorization header (EventSource can't set headers)
+  const token = String(req.query?.token || "").trim() || (req.headers.authorization || "").startsWith("Bearer ") ? (req.headers.authorization || "").replace("Bearer ", "") : null;
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: "Authentication token is required for SSE" });
+  }
+
+  let user;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    user = await User.findById(decoded.sub);
+  } catch (e) {
+    return res.status(401).json({ success: false, message: "Invalid or expired authentication token" });
+  }
+
+  if (!user || user.status !== "active") {
+    return res.status(401).json({ success: false, message: "User account is unavailable" });
+  }
+
   // keep-alive SSE stream for per-user notifications
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -70,10 +91,10 @@ exports.streamNotifications = catchAsync(async (req, res) => {
   res.flushHeaders?.();
 
   // send a ready event
-  res.write(`event: ready\ndata: ${JSON.stringify({ message: 'connected' })}\n\n`);
+  res.write(`event: ready\ndata: ${JSON.stringify({ message: "connected" })}\n\n`);
 
   const { subscribe } = require("../services/announcement-stream.service");
-  const unsubscribe = subscribe(req.user._id, res);
+  const unsubscribe = subscribe(user._id, res);
 
   // heartbeat
   const hb = setInterval(() => {
