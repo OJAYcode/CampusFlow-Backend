@@ -6,6 +6,7 @@ const catchAsync = require("../utils/catchAsync");
 const ApiError = require("../utils/ApiError");
 const { getPublicConfig } = require("../services/pushNotification.service");
 const jwt = require("jsonwebtoken");
+const { notifyForUsers } = require("../services/announcement-stream.service");
 
 exports.getPushPublicConfig = catchAsync(async (_req, res) => {
   return apiResponse(res, {
@@ -108,4 +109,30 @@ exports.streamNotifications = catchAsync(async (req, res) => {
     unsubscribe();
     res.end();
   });
+});
+
+exports.issueSseCookie = catchAsync(async (req, res) => {
+  // issue a short-lived cookie containing a JWT for SSE auth
+  const token = jwt.sign({ sub: req.user._id }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  const cookieOptions = {
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 10 * 60 * 1000,
+  };
+  res.cookie('cf_sse', token, cookieOptions);
+  return apiResponse(res, { message: 'SSE cookie issued' });
+});
+
+exports.listSseClients = catchAsync(async (_req, res) => {
+  try {
+    const { clientsByUser } = require('../services/announcement-stream.service');
+    const result = {};
+    for (const [userId, clients] of clientsByUser.entries()) {
+      result[userId] = (clients || []).length;
+    }
+    return apiResponse(res, { message: 'SSE clients', data: result });
+  } catch (e) {
+    return apiResponse(res, { message: 'SSE clients', data: {} });
+  }
 });

@@ -30,4 +30,4 @@ function notifyForUsers(userIds, payload) {
   }
 }
 
-module.exports = { subscribe, notifyForUsers };
+module.exports = { subscribe, notifyForUsers, clientsByUser };

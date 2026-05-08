@@ -13,4 +13,10 @@ router.get("/", notificationController.listNotifications);
 router.post("/push/subscriptions", notificationController.upsertPushSubscription);
 router.delete("/push/subscriptions", notificationController.deletePushSubscription);
 
+// Issue a short-lived SSE cookie for same-origin EventSource auth
+router.post("/sse-cookie", notificationController.issueSseCookie);
+
+// Return simple counts of connected SSE clients (debugging)
+router.get("/clients", notificationController.listSseClients);
+
 module.exports = router;
