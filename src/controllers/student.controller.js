@@ -14,47 +14,311 @@ const { ensureStudentEnrolled } = require("../services/access.service");
 const { getEligibleElectives, requestElectives } = require("../services/enrollment.service");
 
 const OPEN_LIBRARY_SEARCH_URL = "https://openlibrary.org/search.json";
+const GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes";
+const OPENALEX_WORKS_URL = "https://api.openalex.org/works";
+const PROJECT_GUTENBERG_SEARCH_URL = "https://www.gutenberg.org/ebooks/search/";
+const ONLINE_MATERIAL_CACHE_TTL_MS = 1000 * 60 * 10;
+const ONLINE_MATERIAL_CACHE_MAX_ENTRIES = 100;
+const onlineMaterialSearchCache = new Map();
+const GOOGLE_BOOKS_API_KEY = `${process.env.GOOGLE_BOOKS_API_KEY || ""}`.trim();
 
-function buildOpenLibraryUrl(key) {
-  if (!key || typeof key !== "string") {
+function buildOnlineMaterialCacheKey(title) {
+  return `${title || ""}`.trim().toLowerCase();
+}
+
+function getCachedOnlineMaterialResults(title) {
+  const key = buildOnlineMaterialCacheKey(title);
+  const cached = onlineMaterialSearchCache.get(key);
+
+  if (!cached) {
     return null;
   }
 
-  if (key.startsWith("http")) {
-    return key;
+  if (Date.now() - cached.cachedAt > ONLINE_MATERIAL_CACHE_TTL_MS) {
+    onlineMaterialSearchCache.delete(key);
+    return null;
   }
 
-  if (key.startsWith("/")) {
-    return `https://openlibrary.org${key}`;
-  }
-
-  if (key.startsWith("OL")) {
-    return `https://openlibrary.org/works/${key}`;
-  }
-
-  return null;
+  return cached.data;
 }
 
-function normalizeOnlineMaterialResult(item) {
+function cacheOnlineMaterialResults(title, data) {
+  const key = buildOnlineMaterialCacheKey(title);
+  onlineMaterialSearchCache.set(key, {
+    data,
+    cachedAt: Date.now(),
+  });
+
+  if (onlineMaterialSearchCache.size <= ONLINE_MATERIAL_CACHE_MAX_ENTRIES) {
+    return;
+  }
+
+  const oldestKey = onlineMaterialSearchCache.keys().next().value;
+  if (oldestKey) {
+    onlineMaterialSearchCache.delete(oldestKey);
+  }
+}
+
+function buildArchiveReaderUrl(item) {
+  const archiveId = Array.isArray(item?.ia) ? `${item.ia[0] || ""}`.trim() : "";
+  return archiveId ? `https://archive.org/details/${archiveId}` : null;
+}
+
+function buildProjectGutenbergSearchUrl(title) {
+  return `${PROJECT_GUTENBERG_SEARCH_URL}?query=${encodeURIComponent(title || "")}`;
+}
+
+function decodeHtmlEntities(value) {
+  return `${value || ""}`
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+}
+
+function buildOpenLibrarySearchUrl(item) {
+  const params = new URLSearchParams();
+  const title = `${item?.title || ""}`.trim();
+  const firstAuthor = Array.isArray(item?.author_name) ? `${item.author_name[0] || ""}`.trim() : "";
+
+  if (title) {
+    params.set("title", title);
+  }
+
+  if (firstAuthor) {
+    params.set("author", firstAuthor);
+  }
+
+  const queryString = params.toString();
+  return queryString
+    ? `https://openlibrary.org/search?${queryString}`
+    : "https://openlibrary.org/search";
+}
+
+function normalizeOpenLibraryResult(item) {
   const editionCount = Number(item?.edition_count || 0);
+  const archiveReaderUrl = buildArchiveReaderUrl(item);
+  const hasDirectAccess = Boolean(item?.public_scan_b || item?.has_fulltext || item?.ebook_access === "public");
 
   return {
-    id: item?.key || item?.cover_i || item?.title,
+    id: item?.key || archiveReaderUrl || item?.cover_i || item?.title,
     title: item?.title,
     authors: Array.isArray(item?.author_name) ? item.author_name.filter(Boolean).slice(0, 3) : [],
     year: item?.first_publish_year || null,
     source: "Open Library",
-    sourceUrl:
-      buildOpenLibraryUrl(item?.key) ||
-      `https://openlibrary.org/search?title=${encodeURIComponent(item?.title || "")}`,
+    sourceUrl: archiveReaderUrl || buildOpenLibrarySearchUrl(item),
     coverImageUrl: item?.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : null,
     availabilityLabel:
-      item?.ebook_access === "public"
-        ? "Full text available"
+      hasDirectAccess
+        ? "Read online for free"
         : editionCount
           ? `${editionCount} edition${editionCount === 1 ? "" : "s"} listed`
-          : "Reference listing",
+          : "Search listing",
   };
+}
+
+function normalizeGoogleBooksResult(item) {
+  const volumeInfo = item?.volumeInfo || {};
+  const accessInfo = item?.accessInfo || {};
+  const epubInfo = accessInfo?.epub || {};
+  const pdfInfo = accessInfo?.pdf || {};
+
+  const sourceUrl =
+    accessInfo?.webReaderLink ||
+    volumeInfo?.canonicalVolumeLink ||
+    volumeInfo?.infoLink ||
+    null;
+
+  if (!item?.id || !volumeInfo?.title || !sourceUrl) {
+    return null;
+  }
+
+  let availabilityLabel = "Free ebook";
+  if (accessInfo?.publicDomain) {
+    availabilityLabel = "Public domain";
+  } else if (pdfInfo?.isAvailable || epubInfo?.isAvailable) {
+    availabilityLabel = "Free download or web reader";
+  } else if (accessInfo?.viewability === "ALL_PAGES") {
+    availabilityLabel = "Full view online";
+  }
+
+  return {
+    id: `google-books:${item.id}`,
+    title: volumeInfo.title,
+    authors: Array.isArray(volumeInfo.authors) ? volumeInfo.authors.filter(Boolean).slice(0, 3) : [],
+    year: volumeInfo.publishedDate ? Number.parseInt(`${volumeInfo.publishedDate}`.slice(0, 4), 10) || null : null,
+    source: "Google Books",
+    sourceUrl,
+    coverImageUrl: volumeInfo?.imageLinks?.thumbnail || volumeInfo?.imageLinks?.smallThumbnail || null,
+    availabilityLabel,
+  };
+}
+
+function normalizeOpenAlexResult(item) {
+  const bestLocation = item?.best_oa_location || item?.primary_location || null;
+  const pdfUrl = bestLocation?.pdf_url || item?.open_access?.oa_url || null;
+  const landingPageUrl = bestLocation?.landing_page_url || item?.ids?.doi || item?.doi || null;
+  const sourceUrl = pdfUrl || landingPageUrl;
+
+  if (!item?.id || !item?.display_name || !sourceUrl) {
+    return null;
+  }
+
+  return {
+    id: `openalex:${item.id}`,
+    title: item.display_name,
+    authors: Array.isArray(item?.authorships)
+      ? item.authorships
+        .map((authorship) => authorship?.author?.display_name)
+        .filter(Boolean)
+        .slice(0, 3)
+      : [],
+    year: item?.publication_year || null,
+    source: "OpenAlex",
+    sourceUrl,
+    coverImageUrl: null,
+    availabilityLabel: pdfUrl ? "Open-access PDF available" : "Open-access full text available",
+  };
+}
+
+function normalizeProjectGutenbergResult(match) {
+  const href = decodeHtmlEntities(match?.href);
+  const title = decodeHtmlEntities(match?.title);
+  const subtitle = decodeHtmlEntities(match?.subtitle);
+  const coverPath = decodeHtmlEntities(match?.coverPath);
+
+  if (!href || !title) {
+    return null;
+  }
+
+  return {
+    id: `project-gutenberg:${href}`,
+    title,
+    authors: subtitle ? subtitle.split(/\s+and\s+|,\s*/).filter(Boolean).slice(0, 3) : [],
+    year: null,
+    source: "Project Gutenberg",
+    sourceUrl: `https://www.gutenberg.org${href}`,
+    coverImageUrl: coverPath ? `https://www.gutenberg.org${coverPath}` : null,
+    availabilityLabel: "Read online or download free public-domain ebook",
+  };
+}
+
+function dedupeOnlineMaterialResults(results) {
+  const seen = new Set();
+
+  return results.filter((item) => {
+    const key = `${item.title || ""}|${(item.authors || []).join("|")}`.trim().toLowerCase();
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function isRateLimitError(error) {
+  return error?.response?.status === 429;
+}
+
+async function searchOpenLibraryMaterials(title) {
+  const response = await axios.get(OPEN_LIBRARY_SEARCH_URL, {
+    params: {
+      title,
+      limit: 8,
+      fields: "key,title,author_name,first_publish_year,cover_i,ebook_access,edition_count,ia,has_fulltext,public_scan_b",
+    },
+    timeout: 8000,
+    headers: {
+      "User-Agent": "CampusFlow/1.0",
+    },
+  });
+
+  return Array.isArray(response.data?.docs)
+    ? response.data.docs
+      .map(normalizeOpenLibraryResult)
+      .filter((item) => item.id && item.title && item.sourceUrl)
+    : [];
+}
+
+async function searchGoogleBooksMaterials(title) {
+  const params = {
+    q: `intitle:${title}`,
+    filter: "free-ebooks",
+    printType: "books",
+    maxResults: 8,
+    projection: "lite",
+    orderBy: "relevance",
+  };
+
+  if (GOOGLE_BOOKS_API_KEY) {
+    params.key = GOOGLE_BOOKS_API_KEY;
+  }
+
+  const response = await axios.get(GOOGLE_BOOKS_SEARCH_URL, {
+    params,
+    timeout: 8000,
+    headers: {
+      "User-Agent": "CampusFlow/1.0",
+    },
+  });
+
+  return Array.isArray(response.data?.items)
+    ? response.data.items
+      .map(normalizeGoogleBooksResult)
+      .filter(Boolean)
+    : [];
+}
+
+async function searchOpenAlexMaterials(title) {
+  const response = await axios.get(OPENALEX_WORKS_URL, {
+    params: {
+      search: title,
+      filter: "is_oa:true,has_fulltext:true,type:article|book|book-chapter|dissertation",
+      per_page: 6,
+      select:
+        "id,display_name,publication_year,authorships,best_oa_location,primary_location,open_access,doi,ids",
+      sort: "relevance_score:desc",
+    },
+    timeout: 8000,
+    headers: {
+      "User-Agent": "CampusFlow/1.0",
+    },
+  });
+
+  return Array.isArray(response.data?.results)
+    ? response.data.results
+      .map(normalizeOpenAlexResult)
+      .filter(Boolean)
+    : [];
+}
+
+async function searchProjectGutenbergMaterials(title) {
+  const response = await axios.get(buildProjectGutenbergSearchUrl(title), {
+    timeout: 8000,
+    headers: {
+      "User-Agent": "CampusFlow/1.0",
+    },
+  });
+
+  const html = `${response.data || ""}`;
+  if (!html || html.includes('<span class="title">No records found.</span>')) {
+    return [];
+  }
+
+  const matches = Array.from(
+    html.matchAll(
+      /<li class="booklink">[\s\S]*?<a class="link" href="(?<href>[^"]+)"[\s\S]*?(?:<img class="cover-thumb" src="(?<coverPath>[^"]+)".*?>)?[\s\S]*?<span class="title">(?<title>[\s\S]*?)<\/span>[\s\S]*?(?:<span class="subtitle">(?<subtitle>[\s\S]*?)<\/span>)?[\s\S]*?<\/a>[\s\S]*?<\/li>/g,
+    ),
+  );
+
+  return matches
+    .map((match) => normalizeProjectGutenbergResult(match.groups || {}))
+    .filter(Boolean)
+    .slice(0, 6);
 }
 
 exports.profile = catchAsync(async (req, res) => {
@@ -126,27 +390,54 @@ exports.searchOnlineMaterials = catchAsync(async (req, res) => {
     });
   }
 
-  try {
-    const response = await axios.get(OPEN_LIBRARY_SEARCH_URL, {
-      params: {
-        title,
-        limit: 8,
-        fields: "key,title,author_name,first_publish_year,cover_i,ebook_access,edition_count",
-      },
-      timeout: 8000,
-      headers: {
-        "User-Agent": "CampusFlow/1.0",
-      },
-    });
+  const cachedResults = getCachedOnlineMaterialResults(title);
+  if (cachedResults) {
+    return apiResponse(res, { message: "Online references fetched", data: cachedResults });
+  }
 
-    const results = Array.isArray(response.data?.docs)
-      ? response.data.docs
-        .map(normalizeOnlineMaterialResult)
-        .filter((item) => item.id && item.title && item.sourceUrl)
-      : [];
+  try {
+    const sources = await Promise.allSettled([
+      searchOpenLibraryMaterials(title),
+      searchGoogleBooksMaterials(title),
+      searchOpenAlexMaterials(title),
+      searchProjectGutenbergMaterials(title),
+    ]);
+
+    const openLibraryResults = sources[0].status === "fulfilled" ? sources[0].value : [];
+    const googleBooksResults = sources[1].status === "fulfilled" ? sources[1].value : [];
+    const openAlexResults = sources[2].status === "fulfilled" ? sources[2].value : [];
+    const projectGutenbergResults = sources[3].status === "fulfilled" ? sources[3].value : [];
+    const results = dedupeOnlineMaterialResults([
+      ...openAlexResults,
+      ...openLibraryResults,
+      ...googleBooksResults,
+      ...projectGutenbergResults,
+    ]).slice(0, 12);
+
+    if (!results.length) {
+      const sourceErrors = sources
+        .filter((source) => source.status === "rejected")
+        .map((source) => source.reason);
+
+      if (sourceErrors.length && sourceErrors.every(isRateLimitError)) {
+        return apiResponse(res, {
+          message: "Online references are temporarily rate-limited. Please wait a moment and try again.",
+          data: [],
+        });
+      }
+    }
+
+    cacheOnlineMaterialResults(title, results);
 
     return apiResponse(res, { message: "Online references fetched", data: results });
   } catch (error) {
+    if (isRateLimitError(error)) {
+      return apiResponse(res, {
+        message: "Online references are temporarily rate-limited. Please wait a moment and try again.",
+        data: [],
+      });
+    }
+
     throw new ApiError(502, "Online reference search is unavailable right now");
   }
 });
