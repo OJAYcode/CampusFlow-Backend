@@ -77,6 +77,7 @@ describe("assessment controller", () => {
     Assessment.findById.mockResolvedValue({
       _id: "assessment-1",
       course: "course-1",
+      totalMarks: 10,
       durationMinutes: 30,
       availableTo: new Date(Date.now() + 60_000),
     });
@@ -116,6 +117,59 @@ describe("assessment controller", () => {
     expect(attempt.answers[0].isCorrect).toBe(true);
     expect(attempt.answers[1].awardedMarks).toBe(0);
     expect(attempt.save).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("caps computed assessment score at the assessment total marks", async () => {
+    const attempt = {
+      _id: "attempt-4",
+      answers: [],
+      score: 0,
+      status: "in_progress",
+      startedAt: new Date(Date.now() - 60_000),
+      submittedAt: null,
+      save: jest.fn().mockResolvedValue(true),
+    };
+
+    Assessment.findById.mockResolvedValue({
+      _id: "assessment-5",
+      course: "course-1",
+      totalMarks: 5,
+      durationMinutes: 30,
+      availableTo: new Date(Date.now() + 60_000),
+    });
+    AssessmentQuestion.find.mockResolvedValue([
+      {
+        _id: { toString: () => "q1" },
+        correctAnswer: "A",
+        marks: 4,
+      },
+      {
+        _id: { toString: () => "q2" },
+        correctAnswer: "B",
+        marks: 4,
+      },
+    ]);
+    AssessmentAttempt.findOne.mockResolvedValue(attempt);
+
+    const req = {
+      params: { id: "assessment-5" },
+      user: { _id: "student-1" },
+      body: {
+        answers: [
+          { questionId: "q1", answer: "A" },
+          { questionId: "q2", answer: "B" },
+        ],
+      },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    assessmentController.submitAssessment(req, res, next);
+    await flushAsync();
+
+    expect(attempt.score).toBe(5);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(next).not.toHaveBeenCalled();
   });

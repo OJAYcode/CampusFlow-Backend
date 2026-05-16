@@ -9,6 +9,7 @@ const assessmentSchema = new mongoose.Schema(
     title: { type: String, required: true },
     instructions: String,
     assessmentType: { type: String, enum: Object.values(ASSESSMENT_TYPES), required: true },
+    totalMarks: { type: Number, default: 100, min: 0 },
     durationMinutes: { type: Number, required: true },
     availableFrom: { type: Date, required: true },
     availableTo: { type: Date, required: true },

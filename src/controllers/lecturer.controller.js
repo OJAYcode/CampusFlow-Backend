@@ -36,6 +36,55 @@ const {
   toPdfBuffer,
 } = require("../utils/export");
 
+function sumQuestionMarks(questions = []) {
+  return questions.reduce((total, question) => total + Number(question?.marks || 0), 0);
+}
+
+async function getAttendanceSessionExportContext(sessionId, lecturerId) {
+  const session = await AttendanceSession.findById(sessionId).populate(
+    "course lecturer",
+    "title code semester academicSession fullName",
+  );
+
+  if (!session) {
+    throw new ApiError(404, "Attendance session not found");
+  }
+
+  await ensureLecturerAssigned(session.course?._id || session.course, lecturerId);
+
+  if (!["inactive", "expired"].includes(session.status)) {
+    throw new ApiError(400, "Attendance can only be printed for completed sessions");
+  }
+
+  const [records, attendanceReport] = await Promise.all([
+    AttendanceRecord.find({ session: session._id, status: "present" })
+      .populate("student", "fullName matricNumber email")
+      .sort({ submittedAt: 1, createdAt: 1 }),
+    attendancePercentagesByCourse(session.course?._id || session.course),
+  ]);
+
+  const attendanceRateByStudent = Object.fromEntries(
+    attendanceReport.students.map((student) => [
+      student.student._id?.toString?.(),
+      {
+        attendancePercentage: student.attendancePercentage,
+        submittedSessions: student.submittedSessions,
+        missedSessions: student.missedSessions,
+      },
+    ]),
+  );
+
+  return {
+    session,
+    records,
+    exportDetails: {
+      totalCourseSessions: attendanceReport.totalSessions,
+      averageAttendancePercentage: attendanceReport.averageAttendancePercentage,
+      attendanceRateByStudent,
+    },
+  };
+}
+
 exports.getCourses = catchAsync(async (req, res) => {
   const assignments = await CourseLecturer.find({ lecturer: req.user._id }).populate("course");
   return apiResponse(res, { message: "Assigned courses fetched", data: assignments });
@@ -241,66 +290,24 @@ exports.streamAttendanceSessionLive = catchAsync(async (req, res) => {
 });
 
 exports.exportAttendanceSessionCsv = catchAsync(async (req, res) => {
-  const session = await AttendanceSession.findById(req.params.sessionId).populate(
-    "course lecturer",
-    "title code semester academicSession fullName",
-  );
-
-  if (!session) {
-    throw new ApiError(404, "Attendance session not found");
-  }
-
-  await ensureLecturerAssigned(session.course?._id || session.course, req.user._id);
-
-  const records = await AttendanceRecord.find({ session: session._id, status: "present" })
-    .populate("student", "fullName matricNumber email")
-    .sort({ submittedAt: 1, createdAt: 1 });
-
-  const buffer = toAttendanceSessionCsvBuffer(session, records);
+  const { session, records, exportDetails } = await getAttendanceSessionExportContext(req.params.sessionId, req.user._id);
+  const buffer = toAttendanceSessionCsvBuffer(session, records, exportDetails);
   res.setHeader("Content-Type", "text/csv");
   res.setHeader("Content-Disposition", `attachment; filename="attendance-session-${session.sessionCode}.csv"`);
   res.send(buffer);
 });
 
 exports.exportAttendanceSessionPdf = catchAsync(async (req, res) => {
-  const session = await AttendanceSession.findById(req.params.sessionId).populate(
-    "course lecturer",
-    "title code semester academicSession fullName",
-  );
-
-  if (!session) {
-    throw new ApiError(404, "Attendance session not found");
-  }
-
-  await ensureLecturerAssigned(session.course?._id || session.course, req.user._id);
-
-  const records = await AttendanceRecord.find({ session: session._id, status: "present" })
-    .populate("student", "fullName matricNumber email")
-    .sort({ submittedAt: 1, createdAt: 1 });
-
-  const buffer = await toAttendanceSessionPdfBuffer("Attendance Session Successful Submissions", session, records);
+  const { session, records, exportDetails } = await getAttendanceSessionExportContext(req.params.sessionId, req.user._id);
+  const buffer = await toAttendanceSessionPdfBuffer("Completed Attendance Session Report", session, records, exportDetails);
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="attendance-session-${session.sessionCode}.pdf"`);
   res.send(buffer);
 });
 
 exports.exportAttendanceSessionDocx = catchAsync(async (req, res) => {
-  const session = await AttendanceSession.findById(req.params.sessionId).populate(
-    "course lecturer",
-    "title code semester academicSession fullName",
-  );
-
-  if (!session) {
-    throw new ApiError(404, "Attendance session not found");
-  }
-
-  await ensureLecturerAssigned(session.course?._id || session.course, req.user._id);
-
-  const records = await AttendanceRecord.find({ session: session._id, status: "present" })
-    .populate("student", "fullName matricNumber email")
-    .sort({ submittedAt: 1, createdAt: 1 });
-
-  const buffer = await toAttendanceSessionDocxBuffer("Attendance Session Successful Submissions", session, records);
+  const { session, records, exportDetails } = await getAttendanceSessionExportContext(req.params.sessionId, req.user._id);
+  const buffer = await toAttendanceSessionDocxBuffer("Completed Attendance Session Report", session, records, exportDetails);
   res.setHeader(
     "Content-Type",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -431,6 +438,15 @@ exports.gradeSubmission = catchAsync(async (req, res) => {
   }
   await ensureLecturerAssigned(submission.course, req.user._id);
 
+  const assignment = await Assignment.findById(submission.assignment).select("totalMarks");
+  if (!assignment) {
+    throw new ApiError(404, "Assignment not found");
+  }
+
+  if (req.body.grade > Number(assignment.totalMarks || 0)) {
+    throw new ApiError(400, `Grade cannot be greater than the assignment total marks of ${assignment.totalMarks}`);
+  }
+
   submission.grade = req.body.grade;
   submission.feedback = req.body.feedback;
   submission.status = "graded";
@@ -442,12 +458,21 @@ exports.gradeSubmission = catchAsync(async (req, res) => {
 exports.createAssessment = catchAsync(async (req, res) => {
   await ensureLecturerAssigned(req.body.courseId, req.user._id);
 
+  const questions = Array.isArray(req.body.questions) ? req.body.questions : [];
+  const totalMarks = Number(req.body.totalMarks ?? 100);
+  const questionMarksTotal = sumQuestionMarks(questions);
+
+  if (questionMarksTotal > totalMarks) {
+    throw new ApiError(400, `Assessment question marks (${questionMarksTotal}) cannot exceed the overall marks (${totalMarks})`);
+  }
+
   const assessment = await Assessment.create({
     course: req.body.courseId,
     lecturer: req.user._id,
     title: req.body.title,
     instructions: req.body.instructions,
     assessmentType: req.body.assessmentType,
+    totalMarks,
     durationMinutes: req.body.durationMinutes,
     availableFrom: req.body.availableFrom,
     availableTo: req.body.availableTo,
@@ -456,8 +481,8 @@ exports.createAssessment = catchAsync(async (req, res) => {
     status: req.body.status || "draft",
   });
 
-  if (Array.isArray(req.body.questions) && req.body.questions.length) {
-    const questions = req.body.questions.map((question, index) => ({
+  if (questions.length) {
+    const formattedQuestions = questions.map((question, index) => ({
       assessment: assessment._id,
       questionText: question.questionText,
       questionType: question.questionType || "multiple_choice",
@@ -467,7 +492,7 @@ exports.createAssessment = catchAsync(async (req, res) => {
       order: question.order ?? index + 1,
     }));
 
-    await AssessmentQuestion.insertMany(questions);
+    await AssessmentQuestion.insertMany(formattedQuestions);
   }
 
   return apiResponse(res, { statusCode: 201, message: "Assessment created", data: assessment });
@@ -485,6 +510,15 @@ exports.updateAssessment = catchAsync(async (req, res) => {
     throw new ApiError(404, "Assessment not found");
   }
   await ensureLecturerAssigned(assessment.course, req.user._id);
+
+  if (Array.isArray(req.body.questions)) {
+    const nextTotalMarks = Number(req.body.totalMarks ?? assessment.totalMarks ?? 100);
+    const questionMarksTotal = sumQuestionMarks(req.body.questions);
+
+    if (questionMarksTotal > nextTotalMarks) {
+      throw new ApiError(400, `Assessment question marks (${questionMarksTotal}) cannot exceed the overall marks (${nextTotalMarks})`);
+    }
+  }
 
   const nextAvailableTo = req.body.availableTo ? new Date(req.body.availableTo) : assessment.availableTo;
   const nextStatus =

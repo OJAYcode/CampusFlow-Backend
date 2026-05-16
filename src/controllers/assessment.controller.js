@@ -303,6 +303,8 @@ exports.submitAssessment = catchAsync(async (req, res) => {
     });
   }
 
+  score = Math.min(score, Number(assessment.totalMarks ?? score));
+
   attempt.answers = answers;
   attempt.score = score;
   attempt.status = "submitted";
