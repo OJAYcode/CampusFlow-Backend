@@ -22,13 +22,28 @@ async function attendanceByCourse(courseId) {
   };
 }
 
-async function attendancePercentagesByCourse(courseId) {
+async function attendancePercentagesByCourse(courseId, options = {}) {
+  const sessionFilter = { course: courseId };
+  if (options.sessionIds?.length) {
+    sessionFilter._id = { $in: options.sessionIds };
+  } else if (options.completedOnly) {
+    sessionFilter.status = { $in: ["inactive", "expired"] };
+    if (options.cutoffStartTime) {
+      sessionFilter.startTime = { $lte: options.cutoffStartTime };
+    }
+  }
+
+  const attendanceRecordFilter = { course: courseId, status: "present" };
+  if (options.sessionIds?.length) {
+    attendanceRecordFilter.session = { $in: options.sessionIds };
+  }
+
   const [sessions, enrollments, attendanceRecords] = await Promise.all([
-    AttendanceSession.find({ course: courseId }).sort({ startTime: 1 }).select("_id startTime endTime status sessionCode"),
+    AttendanceSession.find(sessionFilter).sort({ startTime: 1 }).select("_id startTime endTime status sessionCode"),
     CourseEnrollment.find({ course: courseId, approvalStatus: "approved" })
       .populate("student", "fullName matricNumber email")
       .sort({ createdAt: 1 }),
-    AttendanceRecord.find({ course: courseId, status: "present" })
+    AttendanceRecord.find(attendanceRecordFilter)
       .populate("student", "fullName matricNumber email")
       .populate("session", "sessionCode startTime endTime status"),
   ]);

@@ -70,7 +70,8 @@ function toAttendanceSessionCsvBuffer(session, records, details = {}) {
   const {
     totalCourseSessions = "",
     averageAttendancePercentage = "",
-    attendanceRateByStudent = {},
+    includedSessionCount = "",
+    studentRows = [],
   } = details;
   const rows = [
     `Course,${String(session.course?.title || "").replace(/,/g, ";")}`,
@@ -80,25 +81,25 @@ function toAttendanceSessionCsvBuffer(session, records, details = {}) {
     `Venue,${String(session.roomLabel || session.detectedVenueLabel || "").replace(/,/g, ";")}`,
     `Session start,${String(formatDateTime(session.startTime)).replace(/,/g, ";")}`,
     `Session end,${String(formatDateTime(session.endTime)).replace(/,/g, ";")}`,
+    `Report scope,Completed sessions from the beginning of the course through ${String(session.sessionCode || "").replace(/,/g, ";")}`,
+    `Completed sessions included,${String(includedSessionCount).replace(/,/g, ";")}`,
     `Total course sessions,${String(totalCourseSessions).replace(/,/g, ";")}`,
     `Average course attendance,${String(averageAttendancePercentage).replace(/,/g, ";")}%`,
-    `Successful submissions,${records.length}`,
+    `Attendance submissions in report,${records.length}`,
     "",
-    "fullName,matricNumber,email,submittedAt,attendanceRate,totalSubmittedSessions,missedSessions,sessionDate",
+    "fullName,matricNumber,email,lastSubmittedAt,attendanceRate,totalSubmittedSessions,missedSessions,sessionDates",
   ];
 
-  records.forEach((record) => {
-    const studentId = record.student?._id?.toString?.() || record.student?.toString?.();
-    const attendance = studentId ? attendanceRateByStudent[studentId] : null;
+  studentRows.forEach((row) => {
     const values = [
-      record.student?.fullName || "",
-      record.student?.matricNumber || "",
-      record.student?.email || "",
-      formatDateTime(record.submittedAt || record.createdAt),
-      attendance ? `${attendance.attendancePercentage}%` : "--",
-      attendance?.submittedSessions ?? "--",
-      attendance?.missedSessions ?? "--",
-      formatDateTime(session.startTime),
+      row.student?.fullName || "",
+      row.student?.matricNumber || "",
+      row.student?.email || "",
+      formatDateTime(row.latestSubmittedAt),
+      `${row.attendancePercentage ?? 0}%`,
+      row.submittedSessions ?? "--",
+      row.missedSessions ?? "--",
+      (row.sessionDates || []).map((date) => formatDateTime(date)).join(" | "),
     ].map((value) => String(value).replace(/,/g, ";"));
 
     rows.push(values.join(","));
@@ -121,18 +122,19 @@ function toAttendanceSessionPdfBuffer(title, session, records, details = {}) {
       pageWidth * 0.11,
       pageWidth * 0.10,
     ];
-    const rowHeight = 24;
+    const rowHeight = 38;
     const {
       totalCourseSessions = 0,
       averageAttendancePercentage = 0,
-      attendanceRateByStudent = {},
+      includedSessionCount = 0,
+      studentRows = [],
     } = details;
 
     const drawTableHeader = (y) => {
       doc.save();
       doc.fillColor("#eef3ff").rect(doc.page.margins.left, y, pageWidth, rowHeight).fill();
       doc.strokeColor("#d7def0").rect(doc.page.margins.left, y, pageWidth, rowHeight).stroke();
-      const headers = ["Student name", "Matric number", "Submitted at", "Attendance rate", "Submitted", "Missed", "Session date"];
+      const headers = ["Student name", "Matric number", "Last submitted", "Attendance rate", "Submitted", "Missed", "Session dates"];
       let cursor = doc.page.margins.left;
       headers.forEach((header, index) => {
         doc
@@ -148,17 +150,15 @@ function toAttendanceSessionPdfBuffer(title, session, records, details = {}) {
       doc.restore();
     };
 
-    const drawTableRow = (record, y) => {
-      const studentId = record.student?._id?.toString?.() || record.student?.toString?.();
-      const attendance = studentId ? attendanceRateByStudent[studentId] : null;
+    const drawTableRow = (row, y) => {
       const values = [
-        record.student?.fullName || "Unknown student",
-        record.student?.matricNumber || "--",
-        formatDateTime(record.submittedAt || record.createdAt),
-        attendance ? `${attendance.attendancePercentage}%` : "--",
-        attendance?.submittedSessions ?? "--",
-        attendance?.missedSessions ?? "--",
-        formatDateTime(session.startTime),
+        row.student?.fullName || "Unknown student",
+        row.student?.matricNumber || "--",
+        formatDateTime(row.latestSubmittedAt),
+        `${row.attendancePercentage ?? 0}%`,
+        row.submittedSessions ?? "--",
+        row.missedSessions ?? "--",
+        (row.sessionDates || []).map((date) => formatDateTime(date)).join(" | "),
       ];
 
       doc.save();
@@ -192,16 +192,18 @@ function toAttendanceSessionPdfBuffer(title, session, records, details = {}) {
     doc.fontSize(11).text(`Session status: ${session.status || "--"}`);
     doc.fontSize(11).text(`Venue: ${session.roomLabel || session.detectedVenueLabel || "--"}`);
     doc.fontSize(11).text(`Window: ${formatDateTime(session.startTime)} to ${formatDateTime(session.endTime)}`);
+    doc.fontSize(11).text(`Report scope: Completed sessions through ${session.sessionCode || "--"}`);
+    doc.fontSize(11).text(`Completed sessions included: ${includedSessionCount}`);
     doc.fontSize(11).text(`Course sessions so far: ${totalCourseSessions}`);
     doc.fontSize(11).text(`Average course attendance: ${averageAttendancePercentage}%`);
-    doc.fontSize(11).text(`Successful submissions for this session: ${records.length}`);
+    doc.fontSize(11).text(`Attendance submissions included in this report: ${records.length}`);
     doc.moveDown(1.25);
 
     let y = doc.y;
     drawTableHeader(y);
     y += rowHeight;
 
-    records.forEach((record) => {
+    studentRows.forEach((row) => {
       if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
         doc.addPage();
         y = doc.page.margins.top;
@@ -209,7 +211,7 @@ function toAttendanceSessionPdfBuffer(title, session, records, details = {}) {
         y += rowHeight;
       }
 
-      drawTableRow(record, y);
+      drawTableRow(row, y);
       y += rowHeight;
     });
 
@@ -221,32 +223,33 @@ async function toAttendanceSessionDocxBuffer(title, session, records, details = 
   const {
     totalCourseSessions = 0,
     averageAttendancePercentage = 0,
-    attendanceRateByStudent = {},
+    includedSessionCount = 0,
+    studentRows = [],
   } = details;
   const rows = [
     new TableRow({
       children: [
         new TableCell({ children: [new Paragraph("Student name")] }),
         new TableCell({ children: [new Paragraph("Matric Number")] }),
-        new TableCell({ children: [new Paragraph("Submitted at")] }),
+        new TableCell({ children: [new Paragraph("Last submitted")] }),
         new TableCell({ children: [new Paragraph("Attendance rate")] }),
         new TableCell({ children: [new Paragraph("Submitted")] }),
         new TableCell({ children: [new Paragraph("Missed")] }),
+        new TableCell({ children: [new Paragraph("Session dates")] }),
       ],
     }),
-    ...records.map(
-      (record) => {
-        const studentId = record.student?._id?.toString?.() || record.student?.toString?.();
-        const attendance = studentId ? attendanceRateByStudent[studentId] : null;
+    ...studentRows.map(
+      (row) => {
         return (
         new TableRow({
           children: [
-            new TableCell({ children: [new Paragraph(record.student?.fullName || "Unknown student")] }),
-            new TableCell({ children: [new Paragraph(record.student?.matricNumber || "--")] }),
-            new TableCell({ children: [new Paragraph(formatDateTime(record.submittedAt || record.createdAt))] }),
-            new TableCell({ children: [new Paragraph(attendance ? `${attendance.attendancePercentage}%` : "--")] }),
-            new TableCell({ children: [new Paragraph(String(attendance?.submittedSessions ?? "--"))] }),
-            new TableCell({ children: [new Paragraph(String(attendance?.missedSessions ?? "--"))] }),
+            new TableCell({ children: [new Paragraph(row.student?.fullName || "Unknown student")] }),
+            new TableCell({ children: [new Paragraph(row.student?.matricNumber || "--")] }),
+            new TableCell({ children: [new Paragraph(formatDateTime(row.latestSubmittedAt))] }),
+            new TableCell({ children: [new Paragraph(`${row.attendancePercentage ?? 0}%`)] }),
+            new TableCell({ children: [new Paragraph(String(row.submittedSessions ?? "--"))] }),
+            new TableCell({ children: [new Paragraph(String(row.missedSessions ?? "--"))] }),
+            new TableCell({ children: [new Paragraph((row.sessionDates || []).map((date) => formatDateTime(date)).join(" | "))] }),
           ],
         })
       );
@@ -266,9 +269,11 @@ async function toAttendanceSessionDocxBuffer(title, session, records, details = 
           new Paragraph(`Session status: ${session.status || "--"}`),
           new Paragraph(`Venue: ${session.roomLabel || session.detectedVenueLabel || "--"}`),
           new Paragraph(`Window: ${formatDateTime(session.startTime)} to ${formatDateTime(session.endTime)}`),
+          new Paragraph(`Report scope: Completed sessions through ${session.sessionCode || "--"}`),
+          new Paragraph(`Completed sessions included: ${includedSessionCount}`),
           new Paragraph(`Course sessions so far: ${totalCourseSessions}`),
           new Paragraph(`Average course attendance: ${averageAttendancePercentage}%`),
-          new Paragraph(`Successful submissions: ${records.length}`),
+          new Paragraph(`Attendance submissions included in this report: ${records.length}`),
           new Paragraph(""),
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },

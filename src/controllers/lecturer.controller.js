@@ -56,11 +56,22 @@ async function getAttendanceSessionExportContext(sessionId, lecturerId) {
     throw new ApiError(400, "Attendance can only be printed for completed sessions");
   }
 
+  const completedSessions = await AttendanceSession.find({
+    course: session.course?._id || session.course,
+    status: { $in: ["inactive", "expired"] },
+    startTime: { $lte: session.startTime },
+  })
+    .sort({ startTime: 1, createdAt: 1 })
+    .select("_id sessionCode startTime endTime status");
+
+  const completedSessionIds = completedSessions.map((item) => item._id);
+
   const [records, attendanceReport] = await Promise.all([
-    AttendanceRecord.find({ session: session._id, status: "present" })
+    AttendanceRecord.find({ session: { $in: completedSessionIds }, status: "present" })
       .populate("student", "fullName matricNumber email")
+      .populate("session", "sessionCode startTime endTime status")
       .sort({ submittedAt: 1, createdAt: 1 }),
-    attendancePercentagesByCourse(session.course?._id || session.course),
+    attendancePercentagesByCourse(session.course?._id || session.course, { sessionIds: completedSessionIds }),
   ]);
 
   const attendanceRateByStudent = Object.fromEntries(
@@ -80,6 +91,28 @@ async function getAttendanceSessionExportContext(sessionId, lecturerId) {
     exportDetails: {
       totalCourseSessions: attendanceReport.totalSessions,
       averageAttendancePercentage: attendanceReport.averageAttendancePercentage,
+      includedSessionCount: completedSessions.length,
+      includedSessions: completedSessions.map((item) => ({
+        sessionCode: item.sessionCode,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        status: item.status,
+      })),
+      studentRows: attendanceReport.students.map((student) => {
+        const orderedSubmissions = [...(student.successfulSubmissions || [])].sort(
+          (left, right) => new Date(left.submittedAt || left.session?.startTime || 0).getTime() - new Date(right.submittedAt || right.session?.startTime || 0).getTime(),
+        );
+        const latestSubmission = orderedSubmissions[orderedSubmissions.length - 1];
+
+        return {
+          student: student.student,
+          submittedSessions: student.submittedSessions,
+          missedSessions: student.missedSessions,
+          attendancePercentage: student.attendancePercentage,
+          latestSubmittedAt: latestSubmission?.submittedAt || latestSubmission?.session?.startTime || null,
+          sessionDates: orderedSubmissions.map((submission) => submission.session?.startTime).filter(Boolean),
+        };
+      }),
       attendanceRateByStudent,
     },
   };
@@ -716,6 +749,43 @@ exports.sendMessage = catchAsync(async (req, res) => {
     body: req.body.body,
     attachmentUrls: req.body.attachmentUrls || [],
   });
+
+  if (resolvedRecipientIds.length) {
+    const notificationTitle = `New message from ${req.user.fullName || "Lecturer"}`;
+    const notificationBody = req.body.body?.length > 140 ? `${req.body.body.slice(0, 137)}...` : req.body.body;
+
+    await Notification.insertMany(
+      resolvedRecipientIds.map((recipientId) => ({
+        user: recipientId,
+        title: notificationTitle,
+        body: notificationBody,
+        type: "message",
+        metadata: {
+          messageId: message._id,
+          threadKey: req.body.threadKey,
+          courseId: req.body.courseId || null,
+          url: "/student/messages",
+        },
+      })),
+      { ordered: false },
+    ).catch(() => undefined);
+
+    const subscriptions = await PushSubscription.find({
+      user: { $in: resolvedRecipientIds },
+      portal: "student",
+    });
+
+    await notifySubscriptions(subscriptions, {
+      title: notificationTitle,
+      body: notificationBody,
+      data: {
+        url: "/student/messages",
+        messageId: String(message._id),
+        threadKey: req.body.threadKey,
+        courseId: req.body.courseId ? String(req.body.courseId) : undefined,
+      },
+    });
+  }
 
   return apiResponse(res, { statusCode: 201, message: "Message sent", data: message });
 });

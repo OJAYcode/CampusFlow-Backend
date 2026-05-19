@@ -7,11 +7,14 @@ const Assessment = require("../models/assessment.model");
 const AssessmentAttempt = require("../models/assessmentAttempt.model");
 const Announcement = require("../models/announcement.model");
 const Message = require("../models/message.model");
+const Notification = require("../models/notification.model");
+const PushSubscription = require("../models/pushSubscription.model");
 const apiResponse = require("../utils/apiResponse");
 const catchAsync = require("../utils/catchAsync");
 const ApiError = require("../utils/ApiError");
 const { ensureStudentEnrolled } = require("../services/access.service");
 const { getEligibleElectives, requestElectives } = require("../services/enrollment.service");
+const { notifySubscriptions } = require("../services/pushNotification.service");
 
 const OPEN_LIBRARY_SEARCH_URL = "https://openlibrary.org/search.json";
 const GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes";
@@ -539,14 +542,53 @@ exports.sendMessage = catchAsync(async (req, res) => {
     await ensureStudentEnrolled(req.body.courseId, req.user._id);
   }
 
+  const recipientIds = Array.from(new Set((req.body.recipientIds || []).filter(Boolean)));
+
   const message = await Message.create({
     threadKey: req.body.threadKey,
     course: req.body.courseId,
     sender: req.user._id,
-    recipients: req.body.recipientIds,
+    recipients: recipientIds,
     body: req.body.body,
     attachmentUrls: req.body.attachmentUrls || [],
   });
+
+  if (recipientIds.length) {
+    const notificationTitle = `New message from ${req.user.fullName || "Student"}`;
+    const notificationBody = req.body.body?.length > 140 ? `${req.body.body.slice(0, 137)}...` : req.body.body;
+
+    await Notification.insertMany(
+      recipientIds.map((recipientId) => ({
+        user: recipientId,
+        title: notificationTitle,
+        body: notificationBody,
+        type: "message",
+        metadata: {
+          messageId: message._id,
+          threadKey: req.body.threadKey,
+          courseId: req.body.courseId || null,
+          url: "/staff/lecturer/messages",
+        },
+      })),
+      { ordered: false },
+    ).catch(() => undefined);
+
+    const subscriptions = await PushSubscription.find({
+      user: { $in: recipientIds },
+      portal: "staff",
+    });
+
+    await notifySubscriptions(subscriptions, {
+      title: notificationTitle,
+      body: notificationBody,
+      data: {
+        url: "/staff/lecturer/messages",
+        messageId: String(message._id),
+        threadKey: req.body.threadKey,
+        courseId: req.body.courseId ? String(req.body.courseId) : undefined,
+      },
+    });
+  }
 
   return apiResponse(res, { statusCode: 201, message: "Message sent", data: message });
 });
