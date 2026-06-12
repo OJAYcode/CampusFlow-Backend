@@ -280,8 +280,12 @@ async function searchOpenAlexMaterials(title) {
   const response = await axios.get(OPENALEX_WORKS_URL, {
     params: {
       search: title,
-      filter: "is_oa:true,has_fulltext:true,type:article|book|book-chapter|dissertation",
-      per_page: 6,
+      // Only require open access so any freely-readable work qualifies.
+      // Dropping the strict `has_fulltext:true` and the narrow type list lets
+      // far more relevant results through (the normalizer still discards any
+      // work without a usable PDF/landing-page URL).
+      filter: "is_oa:true",
+      per_page: 12,
       select:
         "id,display_name,publication_year,authorships,best_oa_location,primary_location,open_access,doi,ids",
       sort: "relevance_score:desc",
@@ -410,12 +414,21 @@ exports.searchOnlineMaterials = catchAsync(async (req, res) => {
     const googleBooksResults = sources[1].status === "fulfilled" ? sources[1].value : [];
     const openAlexResults = sources[2].status === "fulfilled" ? sources[2].value : [];
     const projectGutenbergResults = sources[3].status === "fulfilled" ? sources[3].value : [];
+
+    // OpenAlex is the primary academic source and always leads the list.
+    // We reserve up to half of the 12 slots for it so the other sources can
+    // never crowd it out, then fill the remainder with the rest in priority
+    // order (Open Library, Google Books, Project Gutenberg).
+    const MAX_RESULTS = 12;
+    const dedupedOpenAlex = dedupeOnlineMaterialResults(openAlexResults);
+    const leadingOpenAlex = dedupedOpenAlex.slice(0, Math.ceil(MAX_RESULTS / 2));
     const results = dedupeOnlineMaterialResults([
-      ...openAlexResults,
+      ...leadingOpenAlex,
+      ...dedupedOpenAlex.slice(leadingOpenAlex.length),
       ...openLibraryResults,
       ...googleBooksResults,
       ...projectGutenbergResults,
-    ]).slice(0, 12);
+    ]).slice(0, MAX_RESULTS);
 
     if (!results.length) {
       const sourceErrors = sources
