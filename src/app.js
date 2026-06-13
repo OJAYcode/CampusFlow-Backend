@@ -32,7 +32,17 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
-app.use("/uploads", express.static("uploads"));
+app.use(
+  "/uploads",
+  (req, res, next) => {
+    // helmet defaults to Cross-Origin-Resource-Policy: same-origin, which makes
+    // browsers block the frontend (a different origin) from fetching uploaded
+    // files. Relax it for served uploads so the in-app file viewer can load them.
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  },
+  express.static("uploads"),
+);
 app.use(requestContext);
 app.use(auditContext);
 app.use(apiLimiter);
