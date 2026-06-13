@@ -46,3 +46,9 @@ services:
         sync: false
       - key: BCRYPT_ROUNDS
         value: "12"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

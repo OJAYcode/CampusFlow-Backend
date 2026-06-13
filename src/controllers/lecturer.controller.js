@@ -20,7 +20,7 @@ const ApiError = require("../utils/ApiError");
 const { createSession } = require("../services/attendance.service");
 const { ensureLecturerAssigned } = require("../services/access.service");
 const { attendancePercentagesByCourse, fullCourseReport } = require("../services/report.service");
-const { mapFilesToUrls } = require("../services/storage.service");
+const { persistUploadedFiles } = require("../services/storage.service");
 const {
   buildSessionLiveView,
   notifySessionLiveUpdate,
@@ -357,7 +357,7 @@ exports.courseAttendancePercentages = catchAsync(async (req, res) => {
 
 exports.uploadMaterial = catchAsync(async (req, res) => {
   await ensureLecturerAssigned(req.body.courseId, req.user._id);
-  const uploadedFiles = mapFilesToUrls("materials", req.files);
+  const uploadedFiles = await persistUploadedFiles("materials", req.files);
   const primaryFile = uploadedFiles[0];
   if (!primaryFile && !req.body.fileUrl) {
     throw new ApiError(400, "A material file is required");
@@ -391,7 +391,7 @@ exports.deleteMaterial = catchAsync(async (req, res) => {
 
 exports.createAssignment = catchAsync(async (req, res) => {
   await ensureLecturerAssigned(req.body.courseId, req.user._id);
-  const uploadedFiles = mapFilesToUrls("assignments", req.files);
+  const uploadedFiles = await persistUploadedFiles("assignments", req.files);
   const assignment = await Assignment.create({
     course: req.body.courseId,
     lecturer: req.user._id,

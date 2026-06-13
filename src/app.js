@@ -35,10 +35,12 @@ app.use(cookieParser());
 app.use(
   "/uploads",
   (req, res, next) => {
-    // helmet defaults to Cross-Origin-Resource-Policy: same-origin, which makes
-    // browsers block the frontend (a different origin) from fetching uploaded
-    // files. Relax it for served uploads so the in-app file viewer can load them.
+    // helmet defaults to Cross-Origin-Resource-Policy: same-origin and
+    // X-Frame-Options: SAMEORIGIN, which make browsers block the frontend (a
+    // different origin) from fetching and embedding uploaded files. Relax both
+    // for served uploads so the in-app file viewer can load and iframe them.
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.removeHeader("X-Frame-Options");
     next();
   },
   express.static("uploads"),

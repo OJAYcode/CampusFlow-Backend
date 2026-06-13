@@ -2,12 +2,12 @@ const CourseMaterial = require("../models/courseMaterial.model");
 const apiResponse = require("../utils/apiResponse");
 const catchAsync = require("../utils/catchAsync");
 const { ensureLecturerAssigned, ensureStudentEnrolled } = require("../services/access.service");
-const { mapFilesToUrls } = require("../services/storage.service");
+const { persistUploadedFiles } = require("../services/storage.service");
 const ApiError = require("../utils/ApiError");
 
 exports.upload = catchAsync(async (req, res) => {
   await ensureLecturerAssigned(req.body.courseId, req.user._id);
-  const uploadedFiles = mapFilesToUrls("materials", req.files);
+  const uploadedFiles = await persistUploadedFiles("materials", req.files);
 
   if (!uploadedFiles.length && !req.body.fileUrl) {
     throw new ApiError(400, "A material file is required");

@@ -4,7 +4,7 @@ const apiResponse = require("../utils/apiResponse");
 const catchAsync = require("../utils/catchAsync");
 const ApiError = require("../utils/ApiError");
 const { ensureLecturerAssigned, ensureStudentEnrolled } = require("../services/access.service");
-const { mapFilesToUrls } = require("../services/storage.service");
+const { persistUploadedFiles } = require("../services/storage.service");
 
 exports.list = catchAsync(async (req, res) => {
   const assignments = await Assignment.find().populate("course lecturer", "title code fullName");
@@ -30,7 +30,7 @@ exports.submit = catchAsync(async (req, res) => {
     throw new ApiError(404, "Assignment not found");
   }
   await ensureStudentEnrolled(assignment.course, req.user._id);
-  const uploadedFiles = mapFilesToUrls("assignments", req.files);
+  const uploadedFiles = await persistUploadedFiles("assignments", req.files);
 
   const status = new Date() > assignment.dueDate ? "late" : "submitted";
   const submission = await AssignmentSubmission.findOneAndUpdate(

@@ -1,7 +1,6 @@
 const path = require("path");
 const multer = require("multer");
 
-const { ensureUploadDir } = require("../services/storage.service");
 const ApiError = require("../utils/ApiError");
 
 const allowedExtensions = new Set([
@@ -17,19 +16,6 @@ const allowedExtensions = new Set([
   ".txt",
 ]);
 
-function createStorage(folderName) {
-  return multer.diskStorage({
-    destination(req, file, cb) {
-      cb(null, ensureUploadDir(folderName));
-    },
-    filename(req, file, cb) {
-      const extension = path.extname(file.originalname).toLowerCase();
-      const base = path.basename(file.originalname, extension).replace(/\s+/g, "-");
-      cb(null, `${Date.now()}-${base}${extension}`);
-    },
-  });
-}
-
 function fileFilter(req, file, cb) {
   const extension = path.extname(file.originalname).toLowerCase();
   if (!allowedExtensions.has(extension)) {
@@ -41,8 +27,12 @@ function fileFilter(req, file, cb) {
 }
 
 function createUploader(folderName, maxCount = 5) {
+  // Memory storage keeps file buffers in RAM so they can be streamed to
+  // Cloudinary (or written to disk locally). folderName is kept in the
+  // signature for call-site clarity and future per-folder limits.
+  void folderName;
   return multer({
-    storage: createStorage(folderName),
+    storage: multer.memoryStorage(),
     fileFilter,
     limits: {
       fileSize: 15 * 1024 * 1024,
