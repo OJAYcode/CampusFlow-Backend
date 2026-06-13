@@ -35,19 +35,24 @@ function toPublicFileUrl(folderName, filename) {
 // be stored as "raw" so Cloudinary serves the original bytes unchanged.
 function uploadBufferToCloudinary(folderName, file) {
   return new Promise((resolve, reject) => {
-    const extension = path.extname(file.originalname);
+    const extension = path.extname(file.originalname).toLowerCase();
     const baseName = path
       .basename(file.originalname, extension)
       .replace(/[^a-zA-Z0-9-_]+/g, "-");
-    const publicId = `${Date.now()}-${baseName}`;
+    // Include the extension directly in the public_id so the delivered raw URL
+    // ends in e.g. ".pdf" (predictable, and the browser sniffs the type). We
+    // deliberately do NOT pass `format` — combining it with resource_type "raw"
+    // can yield a URL that doesn't resolve to the stored bytes.
+    const publicId = `${Date.now()}-${baseName}${extension}`;
 
+    // "auto" lets Cloudinary pick the best resource type per file (PDFs/images
+    // become "image", which delivers reliably once "PDF and ZIP delivery" is
+    // enabled in the Cloudinary console; docx/zip become "raw").
     const stream = cloudinary.uploader.upload_stream(
       {
         folder: `campusflow/${folderName}`,
-        resource_type: "raw",
+        resource_type: "auto",
         public_id: publicId,
-        // Preserve the original extension so the served URL has it.
-        format: extension ? extension.replace(/^\./, "") : undefined,
         use_filename: false,
         unique_filename: false,
       },
