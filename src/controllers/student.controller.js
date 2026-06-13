@@ -71,6 +71,31 @@ function buildProjectGutenbergSearchUrl(title) {
   return `${PROJECT_GUTENBERG_SEARCH_URL}?query=${encodeURIComponent(title || "")}`;
 }
 
+// OpenAlex's free-text `search` matches scholarly titles poorly when the query
+// looks like a file name (e.g. "Data_Warehousing_vs_Data_Mining" or
+// "CSC_408_Lecture_Notes"). Convert separators to spaces and drop obvious
+// file-name noise so the academic search can match. Falls back to a lighter
+// cleanup, then to the raw title, so we never send an empty query.
+function buildOpenAlexSearchTerm(title) {
+  const raw = `${title || ""}`.trim();
+  if (!raw) {
+    return "";
+  }
+
+  const spaced = raw
+    .replace(/[._\-/\\]+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const cleaned = spaced
+    .replace(/\b(vs|versus|lecture|lectures|notes?|handout|slides?|chapter)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned || spaced || raw;
+}
+
 function decodeHtmlEntities(value) {
   return `${value || ""}`
     .replace(/&amp;/g, "&")
@@ -277,9 +302,14 @@ async function searchGoogleBooksMaterials(title) {
 }
 
 async function searchOpenAlexMaterials(title) {
+  const searchTerm = buildOpenAlexSearchTerm(title);
+  if (!searchTerm) {
+    return [];
+  }
+
   const response = await axios.get(OPENALEX_WORKS_URL, {
     params: {
-      search: title,
+      search: searchTerm,
       // Only require open access so any freely-readable work qualifies.
       // Dropping the strict `has_fulltext:true` and the narrow type list lets
       // far more relevant results through (the normalizer still discards any
