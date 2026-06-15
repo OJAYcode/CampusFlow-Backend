@@ -18,8 +18,13 @@ function getGeofenceAllowanceMeters(session, reportedAccuracy) {
   const lecturerAccuracy = Number.isFinite(session.locationAccuracy) ? Math.max(session.locationAccuracy, 0) : 0;
   const combinedAccuracy = studentAccuracy + lecturerAccuracy;
 
-  // Keep a practical GPS tolerance without letting the allowance dwarf the lecturer radius.
-  return Math.min(Math.max(combinedAccuracy, 10), 75);
+  // Two consumer phones sitting together routinely report coordinates 50-100m
+  // apart because of independent GPS error, and the divergence is worse indoors
+  // (where attendance usually happens). Devices also under-report their own
+  // accuracy, so the reported value alone is not enough. Allow a generous
+  // tolerance so genuinely co-located students are not rejected. Lecturers who
+  // need strict proximity can enable strictMode (allowance 0).
+  return Math.min(Math.max(combinedAccuracy, 50), 200);
 }
 
 async function createSession(lecturerId, payload) {
